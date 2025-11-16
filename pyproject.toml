@@ -1,15 +1,19 @@
-[project]
-name = "standard-goverance-template"
+[tool.poetry]
+name = "audit_inquiry_automation"
 version = "0.1.0"
-description = ""
-authors = [
-    {name = "qldrh112",email = "didie8520@gmail.com"}
-]
+description = "Automated PDF Extraction Tool for inquiry (Python Service)"
+authors = ["qldrh112 <didie8520@gmail.com>"]
 readme = "README.md"
-requires-python = ">=3.11"
-dependencies = [
-]
 
+[tool.poetry.dependencies]
+python = ">=3.11, <4.0.0"
+streamlit = "^1.33.0"
+pdfplumber = "^0.10.4"
+pandas = "^2.2.1"
+openpyxl = "^3.1.2"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.1.1"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
