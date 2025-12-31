@@ -1,30 +1,55 @@
-# --- 환경 변수 및 비밀 키 ---
-# 절대로 비밀 키를 Git에 올리지 마세요!
-.env
-.env.*
-
-# --- Poetry 및 Python 가상 환경 ---
-# Poetry가 생성하는 가상 환경 폴더
-.venv/
-venv/
-*.venv
-
-# Poetry 캐시
-.poetry-cache/
-
-# Python 캐시 파일
+# --- Python & Cache ---
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-# --- IDE 설정 ---
-# VSCode
-.vscode/
+# --- Virtual Environment ---
+# 가상환경 폴더는 절대 업로드하지 않습니다.
+venv/
+.venv/
+env/
+.env_folder/
 
-# PyCharm
+# --- Environment Variables ---
+# 보안 핵심: .env 파일은 절대 커밋하면 안 됩니다.
+.env
+
+# --- IDE & Editors ---
 .idea/
+.vscode/
+*.swp
+*.swo
 
-# --- 운영체제(OS) 자동 생성 파일 ---
-# Windows
-Thumbs.db
+# --- Streamlit ---
+.streamlit/secrets.toml
+.streamlit/config.toml
+
+# --- Project Data & Logs ---
+# 테스트용 데이터나 결과물은 업로드하지 않습니다.
+data/
+output/
+result/
+logs/
+*.log
+design/
+
+# --- Mac OS ---
+.DS_Store
