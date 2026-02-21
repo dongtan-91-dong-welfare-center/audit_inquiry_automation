@@ -21,6 +21,8 @@ class ImagePreprocessor:
         # TODO: 스캔 과정에서 삐뚤어진 이미지 기울기 보정 (Deskewing)
 
         # TODO 1: 그레이스케일(Grayscale)  변환 수행 (cv2.cvtColor 활용)
+        # numpy.ndarray.shape: 배열의 차원을 나타내는 함수
+        # 컬러이미지의 배열: (세로, 가로, 3), 흑백이미지의 배열: (세로, 가로)
         if len(image.shape) == 3:  # 컬러 이미지인 경우
             processed_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         else:

@@ -2,7 +2,6 @@
 import pytest
 import cv2
 import numpy as np
-import os
 import glob
 from src.core.preprocessor import ImagePreprocessor
 
@@ -10,6 +9,8 @@ from src.core.preprocessor import ImagePreprocessor
 IMAGE_FILES = glob.glob("tests/data/*.jpg")
 
 class TestImagePreprocessor:
+    # 테스트를 수행하기 위해 미리 준비해야 하는 환경을 정의하는 데코레이터
+    # 함수마다 매번 ImagePreprocessor() 수행하지 않아도 되니 코드가 깔끔해지고 효율적
     @pytest.fixture
     def preprocessor(self):
         """테스트에 사용할 클래스 인스턴스를 미리 생성"""
@@ -25,12 +26,13 @@ class TestImagePreprocessor:
         result = preprocessor.enhance_image(grayscale_input)
 
         # 채널 유실이나 형태 변형이 없는지 확인
-        assert len(result.shape) == 2
+        assert len(result.shape) == 2   # 흑백일 것으로 추정
 
+    # 동일한 테스트 로지글 여러 개의 서로 다른 데이터로 반복해서 실행하는 데코레이터
     @pytest.mark.parametrize("image_path", IMAGE_FILES)
     def test_with_real_files(self, preprocessor, image_path):
         """
-        검증 내용: data 폴더 내의 모든 png 파일이 성공적으로 처리되는가?
+        검증 내용: data 폴더 내의 모든 jpg 파일이 성공적으로 처리되는가?
         """
         img = cv2.imread(image_path)
         if img is None:
