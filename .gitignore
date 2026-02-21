@@ -1,8 +1,16 @@
-# --- Python & Cache ---
+# https://www.toptal.com/developers/gitignore/api/python 에서 생성됨
+# 수정: https://www.toptal.com/developers/gitignore?templates=python
+
+### Python 관련 ###
+# 바이트 코드 / 최적화 / DLL 파일
 __pycache__/
 *.py[cod]
 *$py.class
+
+# C 확장 기능
 *.so
+
+# 배포 / 패키징
 .Python
 build/
 develop-eggs/
@@ -16,40 +24,143 @@ parts/
 sdist/
 var/
 wheels/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
 
-# --- Virtual Environment ---
-# 가상환경 폴더는 절대 업로드하지 않습니다.
-venv/
-.venv/
-env/
-.env_folder/
+# PyInstaller
+# 보통 PyInstaller가 실행 파일을 빌드하기 전에 날짜/기타 정보를 주입하기 위해
+# 파이썬 스크립트가 템플릿으로부터 이 파일들을 생성합니다.
+*.manifest
+*.spec
 
-# --- Environment Variables ---
-# 보안 핵심: .env 파일은 절대 커밋하면 안 됩니다.
+# 설치 로그
+pip-log.txt
+pip-delete-this-directory.txt
+
+# 단위 테스트 / 커버리지 보고서
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# 번역 파일
+*.mo
+*.pot
+
+# Scrapy 관련:
+.scrapy
+
+# Sphinx 문서화
+docs/_build/
+
+# PyBuilder 관련
+.pybuilder/
+target/
+
+# Jupyter Notebook 관련
+.ipynb_checkpoints
+
+# IPython 관련
+profile_default/
+ipython_config.py
+
+# pyenv
+# 라이브러리나 패키지의 경우, 코드가 여러 환경에서 실행되어야 하므로 이 파일을 무시하는 것이 좋습니다.
+# 그렇지 않은 경우에는 버전 관리에 포함시키세요.
+# .python-version
+
+# pipenv
+# pypa/pipenv#598에 따르면 Pipfile.lock을 버전 관리에 포함하는 것을 권장합니다.
+# 다만 협업 시 특정 플랫폼 전용 의존성이 있거나 교차 플랫폼을 지원하지 않는 경우,
+# pipenv가 제대로 작동하지 않거나 필요한 의존성을 모두 설치하지 못할 수 있습니다.
+#Pipfile.lock
+
+# poetry
+# Pipfile.lock과 마찬가지로 일반적으로 poetry.lock을 버전 관리에 포함하는 것을 권장합니다.
+# 특히 바이너리 패키지의 경우 재현성을 보장하기 위해 권장되며, 라이브러리의 경우 무시하는 경우가 더 많습니다.
+# https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
+#poetry.lock
+
+# pdm
+# Pipfile.lock과 마찬가지로 일반적으로 pdm.lock을 버전 관리에 포함하는 것을 권장합니다.
+#pdm.lock
+# pdm은 프로젝트 전반의 설정을 .pdm.toml에 저장하지만, 버전 관리에는 포함하지 않는 것을 권장합니다.
+# https://pdm.fming.dev/#use-with-ide
+.pdm.toml
+
+# PEP 582; pyflow 및 pdm 등에서 사용됨
+__pypackages__/
+
+# Celery 관련
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath 파싱된 파일
+*.sage.py
+
+# 가상 환경 (Environments)
 .env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
 
-# --- IDE & Editors ---
+# Spyder 프로젝트 설정
+.spyderproject
+.spyproject
+
+# Rope 프로젝트 설정
+.ropeproject
+
+# mkdocs 문서
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre 타입 검사기
+.pyre/
+
+# pytype 정적 타입 분석기
+.pytype/
+
+# Cython 디버그 심볼
+cython_debug/
+
+# PyCharm
+# JetBrains 전용 템플릿은 별도의 JetBrains.gitignore에서 관리됩니다.
+# https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
+# 해당 내용을 글로벌 gitignore에 추가하거나 이 파일에 병합할 수 있습니다.
+# (권장하지 않음) 프로젝트 전체 설정 폴더를 무시하려면 아래 주석을 해제하세요.
+#.idea/
+
+### Python 패치 ###
+# Poetry 로컬 설정 파일 - https://python-poetry.org/docs/configuration/#local-configuration
+poetry.toml
+
+# ruff (린터)
+.ruff_cache/
+
+# LSP 설정 파일
+pyrightconfig.json
+
+# PyCharm 프로젝트 설정 전체 제외
 .idea/
-.vscode/
-*.swp
-*.swo
 
-# --- Streamlit ---
-.streamlit/secrets.toml
-.streamlit/config.toml
-
-# --- Project Data & Logs ---
-# 테스트용 데이터나 결과물은 업로드하지 않습니다.
-data/
-output/
-result/
-logs/
-*.log
-design/
-
-# --- Mac OS ---
-.DS_Store
+# https://www.toptal.com/developers/gitignore/api/python 끝

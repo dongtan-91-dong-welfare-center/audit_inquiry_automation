@@ -1,37 +1,30 @@
-[tool.poetry]
+[project]
 name = "audit-inquiry-automation"
 version = "0.1.0"
-description = "Financial Audit Inquiry Automation Tool (MVP)"
-authors = ["qldrh112 <didie8520@gmail.com>"]
+description = ""
+authors = [
+    {name = "PDW-Accountant",email = "kkk273@naver.com"}
+]
+
+license = {text = "DONGTAN 91-DONG WELFARE CENTER"}
 readme = "README.md"
-package-mode = false
+requires-python = ">=3.10"
+dependencies = [
+    "tesseract (>=0.1.3,<0.2.0)",
+    "opencv-python (>=4.13.0.92,<5.0.0.0)",
+    "pytest (>=9.0.2,<10.0.0)"
+]
 
-[tool.poetry.dependencies]
-# Python 3.10 이상 3.12 미만을 권장합니다 (PaddleOCR 호환성 최적)
-python = ">=3.10,<3.12"
+[tool.poetry]   # poetry에서 사용하는 특수한 기능에 대한 정의 모음
+# 배포용 패키지가 아니라 단순 실행용 프로젝트
+package-mode = false    # 가상환경에 패키지로 등록하지 않도록 false를 명시
 
-# --- GUI Framework (ADR-002) ---
-streamlit = "^1.32.0"
+[dependency-groups]
+dev = [
+    "streamlit (>=1.54.0,<2.0.0)"
+]
 
-# --- PDF & Data Processing (ADR-001) ---
-pdfplumber = "^0.11.0"
-pandas = "^2.2.0"
-openpyxl = "^3.1.2"
-
-# --- OCR & Image Processing (Modified ADR-001) ---
-# CPU 버전 PaddlePaddle (GPU 필요 시 paddlepaddle-gpu로 변경)
-paddlepaddle = "^2.6.0"
-paddleocr = ">=2.7.0"
-opencv-python-headless = "^4.9.0"
-
-# --- Utilities ---
-# Pillow는 위 패키지들의 의존성으로 자동 최신 설치됨
-pytesseract = "^0.3.13"
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.0.0"
-black = "^24.0.0"
 
 [build-system]
-requires = ["poetry-core"]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
