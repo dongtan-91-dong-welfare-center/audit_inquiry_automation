@@ -58,89 +58,204 @@ class ImagePreprocessor:
 
     @staticmethod
     def _detect_tables(image: np.ndarray) -> list[tuple[int, int, int, int]]:
-        """
-        이미지를 극단적으로 변형하여 글자는 지우고 표의 '선'만 추출해 좌표를 반환합니다.
-        여기서 변환된 이미지는 반환되지 않고 버려집니다.
-
-        Args:
-            image (np.ndarray): 기울기가 보정된 전체 페이지 이미지 (BGR 또는 Grayscale)
-
-        Returns:
-            list[tuple[int, int, int, int]]: 탐지된 표들의 (x, y, w, h) 좌표 리스트 (위에서 아래 순서로 정렬 권장)
-        """
-        # 1. 그레이스케일(Grayscale) 변환
-        """
-        numpy.ndarray.shape: 배열의 차원을 나타내는 함수
-        컬러이미지의 배열: (세로, 가로, 3), 흑백이미지의 배열: (세로, 가로)
-        """
-        if len(image.shape) == 3:  # 컬러 이미지인 경우
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)   # 흑백 이미지로 변환
+        if len(image.shape) == 3:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         else:
             gray = image.copy()
 
-        # 2. 어댑티브 임계값 처리(Adaptive Thresholding)로 이진화 수행
-        """
-        어댑티브 임계값: 전체 이미지의 평균을 기준으로 0(검정)과 255(하양)로 구분하는 것이 아니라
-        이미지를 작은 구역으로 나누어 임계값마다 배경은 하얗게(255), 글자는 까맣게(0) 처리
-        -> 스캔 문서에서 명암 차이에서도 글자를 잘 찾아내게 함
-        - 255: 임계값을 넘었을 때 부여할 최대값으로 흰색을 만들어야 하므로 255 고정
-        - cv2.ADAPTIVE_THRESH_GAUSSIAN_C: 주변 영역의 평균을 구할 때 중앙부 픽셀에 가중치를 두어 조명 변화에 더 유연하게 대응하기 위한 가우시안 가중치
-        - cv2.THRESH_BINARY: 기준보다 밝으면 255, 어두우면 0으로 나누는 이진화 방식
-        - 11 (blockSize): 임계값을 계산할 주변 영역의 크기(11x11)입니다. 글자의 획 굵기보다 충분히 커야 글자와 배경을 구분 가능
-        - 1 (C): 계산된 평균값에서 뺄 상수입니다. 노이즈를 미세하게 조절하여 배경을 더 깨끗하게 날리는 역할
-        """
+        # 1. 이진화 (선이 연해도 잡을 수 있도록 C값을 높임)
         binary = cv2.adaptiveThreshold(
-            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 0
+            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 21, 10
         )
 
-        # 이미지의 가로, 세로 길이 파악 (선 추출 커널의 기준 길이가 됨)
+        # 2. 텍스트 라인을 덩어리로 묶음 (가로 팽창 강화)
+        # 본문 표의 끊어진 행들을 하나로 묶기 위해 가로 커널을 키웁니다.
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (50, 3))
+        dilate = cv2.dilate(binary, kernel, iterations=2)
+
+        contours, _ = cv2.findContours(dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
         height, width = binary.shape
-
-        # TODO: 형태학적 연산(Morphology)을 사용하여 가로선과 세로선을 추출 (cv2.getStructuringElement 활용)
-        # 3. 모폴로지: 아주 길쭉한 커널을 사용하여 글자는 다 지우고 '긴 가로선'과 '긴 세로선'만 남김
-        # 3-1. 가로선 추출 (Horizontal Line Detection)
-        # 너비의 1/40 정도 길이를 가진 가로 커널 생성 (이 값은 문서 내 표의 크기에 따라 튜닝 필요)
-        horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (width // 40, 1))
-        # 열림(Open) 연산: 커널 크기보다 작은 노이즈(일반 텍스트)는 지우고, 긴 가로선만 남김
-        detect_horizontal = cv2.morphologyEx(binary, cv2.MORPH_OPEN, horizontal_kernel, iterations=2)
-
-        # 3-2. 세로선 추출 (Vertical Line Detection)
-        # 높이의 1/40 정도 길이를 가진 세로 커널 생성
-        vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, height // 40))
-        detect_vertical = cv2.morphologyEx(binary, cv2.MORPH_OPEN, vertical_kernel, iterations=2)
-
-        # TODO: 가로선과 세로선을 합성하여 표의 뼈대(Grid) 이미지를 생성
-        # 4. 가로선과 세로선 병합 (표 뼈대 완성)
-        # 두 이미지를 OR 연산하여 가로선과 세로선이 모두 포함된 온전한 표의 격자(Grid) 생성
-        table_mask = cv2.bitwise_or(detect_horizontal, detect_vertical)
-
-        # TODO: cv2.findContours를 사용하여 뼈대 이미지에서 외곽선(표 덩어리) 찾기
-        # 5. 윤곽선(Contours) 찾기
-        # RETR_EXTERNAL: 표 내부의 셀이 아닌, 가장 바깥쪽 외곽선(표 전체)만 추출
-        contours, _ = cv2.findContours(table_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        # TODO: 지나치게 작은 노이즈 영역은 면적(cv2.contourArea)을 기준으로 필터링하여 제외
         bounding_boxes = []
-        # 노이즈를 걸러내기 위한 최소 면적 기준 (전체 이미지 면적의 1% 이상인 것만 표로 간주)
-        min_table_area = (width * height) * 0.01
 
-        # TODO: 찾아낸 윤곽선을 감싸는 사각형 좌표(cv2.boundingRect) 추출
-        # 7. 조건에 맞는 윤곽선만 사각형 좌표로 변환
         for contour in contours:
-            area = cv2.contourArea(contour)
-            if area > min_table_area:
-                x, y, w, h = cv2.boundingRect(contour)
+            x, y, w, h = cv2.boundingRect(contour)
 
-                # 표가 너무 얇은 경우(예: 단순 분리선) 제외하기 위한 비율(Ratio) 검증 추가 가능
-                if w > 50 and h > 50:
-                    bounding_boxes.append((x, y, w, h))
+            # [수정] 최소 조건 완화: 본문 표가 작게 찍힌 경우도 대비
+            if w < width * 0.25 or h < 40:
+                continue
 
-        # TODO: 문서 상단부터 하단 순서(Y축 기준)로 좌표 리스트를 정렬하여 반환
-        # 8. Y좌표(위->아래)를 기준으로 정렬
-        # 문서 상단에 있는 표부터 순차적으로 OCR 및 데이터를 추출하기 위함
-        bounding_boxes.sort(key=lambda box: box[1])
+            # [수정] 빽빽한 텍스트 덩어리(작성요령)를 거르는 밀도 (0.4 정도로 상향)
+            roi_binary = binary[y:y + h, x:x + w]
+            density = cv2.countNonZero(roi_binary) / (w * h)
 
+            # 작성요령(image_8a0c1d.png)은 밀도가 매우 높지만,
+            # 본문 표를 살리기 위해 밀도 필터는 보조적으로만 사용합니다.
+            if density > 0.45:
+                continue
+
+            # [핵심] 위치 기반 필터: 작성요령은 보통 하단 75% 이후에 위치함
+            # 만약 박스가 하단에 있으면서 높이가 낮다면 작성요령일 확률이 매우 높음
+            if y > height * 0.75 and h < 250:
+                # 이 영역은 작성요령일 가능성이 높으므로 건너뜁니다.
+                continue
+
+            bounding_boxes.append((x, y, w, h))
+
+        # Y축 기준 정렬 (문서 흐름대로)
+        bounding_boxes.sort(key=lambda b: b[1])
         return bounding_boxes
+
+    # @staticmethod
+    # def _detect_tables(image: np.ndarray) -> list[tuple[int, int, int, int]]:
+    #     """
+    #     이미지를 극단적으로 변형하여 글자는 지우고 표의 '선'만 추출해 좌표를 반환합니다.
+    #     여기서 변환된 이미지는 반환되지 않고 버려집니다.
+    #
+    #     Args:
+    #         image (np.ndarray): 기울기가 보정된 전체 페이지 이미지 (BGR 또는 Grayscale)
+    #
+    #     Returns:
+    #         list[tuple[int, int, int, int]]: 탐지된 표들의 (x, y, w, h) 좌표 리스트 (위에서 아래 순서로 정렬 권장)
+    #     """
+    #     # 1. 그레이스케일(Grayscale) 변환
+    #     """
+    #     numpy.ndarray.shape: 배열의 차원을 나타내는 함수
+    #     컬러이미지의 배열: (세로, 가로, 3), 흑백이미지의 배열: (세로, 가로)
+    #     """
+    #     if len(image.shape) == 3:  # 컬러 이미지인 경우
+    #         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)   # 흑백 이미지로 변환
+    #     else:
+    #         gray = image.copy()
+    #
+    #     # 2. 어댑티브 임계값 처리(Adaptive Thresholding)로 이진화 수행
+    #     """
+    #     어댑티브 임계값: 전체 이미지의 평균을 기준으로 0(검정)과 255(하양)로 구분하는 것이 아니라
+    #     이미지를 작은 구역으로 나누어 임계값마다 배경은 하얗게(255), 글자는 까맣게(0) 처리
+    #     -> 스캔 문서에서 명암 차이에서도 글자를 잘 찾아내게 함
+    #     - 255: 임계값을 넘었을 때 부여할 최대값으로 흰색을 만들어야 하므로 255 고정
+    #     - cv2.ADAPTIVE_THRESH_GAUSSIAN_C: 주변 영역의 평균을 구할 때 중앙부 픽셀에 가중치를 두어 조명 변화에 더 유연하게 대응하기 위한 가우시안 가중치
+    #     - cv2.THRESH_BINARY: 기준보다 밝으면 255, 어두우면 0으로 나누는 이진화 방식
+    #     - 11 (blockSize): 임계값을 계산할 주변 영역의 크기(11x11)입니다. 글자의 획 굵기보다 충분히 커야 글자와 배경을 구분 가능
+    #     - 1 (C): 계산된 평균값에서 뺄 상수입니다. 노이즈를 미세하게 조절하여 배경을 더 깨끗하게 날리는 역할
+    #     """
+    #     binary = cv2.adaptiveThreshold(
+    #         gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 15, -2
+    #     )
+    #
+    #     # 이미지의 가로, 세로 길이 파악 (선 추출 커널의 기준 길이가 됨)
+    #     height, width = binary.shape
+    #
+    #     # TODO: 형태학적 연산(Morphology)을 사용하여 가로선과 세로선을 추출 (cv2.getStructuringElement 활용)
+    #     # 3. 모폴로지: 아주 길쭉한 커널을 사용하여 글자는 다 지우고 '긴 가로선'과 '긴 세로선'만 남김
+    #     # 3-1. 가로선 추출 (Horizontal Line Detection)
+    #     # 너비의 1/40 정도 길이를 가진 가로 커널 생성 (이 값은 문서 내 표의 크기에 따라 튜닝 필요)
+    #     horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (50, 1))
+    #     # 열림(Open) 연산: 커널 크기보다 작은 노이즈(일반 텍스트)는 지우고, 긴 가로선만 남김
+    #     detect_horizontal = cv2.morphologyEx(binary, cv2.MORPH_OPEN, horizontal_kernel, iterations=2)
+    #
+    #     # 3-2. 세로선 추출 (Vertical Line Detection)
+    #     # 높이의 1/40 정도 길이를 가진 세로 커널 생성
+    #     vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, height // 40))
+    #     detect_vertical = cv2.morphologyEx(binary, cv2.MORPH_OPEN, vertical_kernel, iterations=2)
+    #
+    #     # 4. 표 교차점(Joint) 및 뼈대 마스크 생성
+    #     # bitwise_and는 가로선과 세로선이 만나는 지점(T자, 十자)만 남깁니다. 텍스트는 이 지점이 거의 발생하지 않습니다.
+    #     joints = cv2.bitwise_and(detect_horizontal, detect_vertical)
+    #     table_mask = cv2.bitwise_or(detect_horizontal, detect_vertical)
+    #
+    #     # 5. 모든 윤곽선 탐지 및 1차 필터링
+    #     contours, _ = cv2.findContours(table_mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    #
+    #     temp_boxes = []
+    #     for contour in contours:
+    #         x, y, w, h = cv2.boundingRect(contour)
+    #         if w > width * 0.95 or h > height * 0.95:
+    #             continue
+    #         # 텍스트 오인식을 줄이기 위해 최소 길이를 상향 조정 (40 -> width // 20)
+    #         if w > width // 20 or h > height // 20:
+    #             temp_boxes.append([x, y, w, h])
+    #
+    #     # 6. 박스 병합 (Dynamic Padding 적용)
+    #     dynamic_x_pad = width // 15
+    #     dynamic_y_pad = height // 100
+    #     merged_boxes = ImagePreprocessor._merge_boxes(temp_boxes, x_pad=dynamic_x_pad, y_pad=dynamic_y_pad)
+    #
+    #     # 7. 구조 분석 기반 최종 필터링 및 중복 제거
+    #     bounding_boxes = []
+    #     for x, y, w, h in merged_boxes:
+    #         # 1. 작성요령 배제 (텍스트 밀도 체크)
+    #         roi_binary = binary[y:y + h, x:x + w]
+    #         black_pixels = cv2.countNonZero(roi_binary)
+    #         density = black_pixels / float(w * h)
+    #
+    #         # 작성요령은 밀도가 매우 높습니다 (0.3 이상). 메인 표는 여백이 많아 0.1~0.2 수준입니다.
+    #         if density > 0.35:
+    #             continue
+    #
+    #         # 2. 세로 구조 분석 (가로선이 없어도 표임을 증명)
+    #         # ROI 내에서 수직 투영(Vertical Projection)을 통해 열(Column) 개수 파악
+    #         vertical_projection = np.sum(roi_binary, axis=0)
+    #         # 픽셀 값이 있는 구간(글자)과 없는 구간(공백)의 변화 횟수 측정
+    #         columns = 0
+    #         in_column = False
+    #         for val in vertical_projection:
+    #             if val > 0 and not in_column:
+    #                 columns += 1
+    #                 in_column = True
+    #             elif val == 0 and in_column:
+    #                 in_column = False
+    #
+    #         # 금융조회서 메인 표는 보통 5개 이상의 열(Column)을 가집니다.
+    #         if columns < 4:
+    #             continue
+    #
+    #         # 3. 면적 및 비율 최종 필터
+    #         if w * h < (width * height * 0.05) or w < width * 0.5:
+    #             continue
+    #
+    #         bounding_boxes.append((x, y, w, h))
+    #
+    #     # 8. Y좌표 기준 정렬 반환
+    #     bounding_boxes.sort(key=lambda box: box[1])
+    #     return bounding_boxes
+
+    @staticmethod
+    def _merge_boxes(boxes: list[list[int]], x_pad: int, y_pad: int) -> list[tuple[int, int, int, int]]:
+        if not boxes:
+            return []
+
+        # 초기 사각형 리스트 변환 [x1, y1, x2, y2]
+        rects = [[b[0], b[1], b[0] + b[2], b[1] + b[3]] for b in boxes]
+
+        merged = True
+        while merged:
+            merged = False
+            new_rects = []
+            while rects:
+                r1 = rects.pop(0)
+                matched = False
+                for i, r2 in enumerate(new_rects):
+                    # 인접 박스 판단 로직
+                    if (r1[0] <= r2[2] + x_pad and r1[2] >= r2[0] - x_pad and
+                        r1[1] <= r2[3] + y_pad and r1[3] >= r2[1] - y_pad):
+                        new_rects[i] = [
+                            min(r1[0], r2[0]),
+                            min(r1[1], r2[1]),
+                            max(r1[2], r2[2]),
+                            max(r1[3], r2[3])
+                        ]
+                        matched = True
+                        merged = True
+                        break
+
+                if not matched:
+                    new_rects.append(r1)
+            rects = new_rects
+
+        # 결과 반환 시 중복 좌표를 한 번 더 걸러줌
+        unique_results = sorted(list(set(tuple(r) for r in rects)))
+        return [(r[0], r[1], r[2] - r[0], r[3] - r[1]) for r in unique_results]
 
     @staticmethod
     def enhance_image(cropped_image: np.ndarray) -> ndarray:
@@ -174,7 +289,7 @@ class ImagePreprocessor:
 
         # 3. 이진화 (여기서는 INV를 쓰지 않음. 일반 문서처럼 배경은 하얗게, 글자는 까맣게)
         processed = cv2.adaptiveThreshold(
-            processed_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
+            processed_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 10
         )
 
         # 4. 모폴로지 팽창/침식 연산을 통해 끊어진 표의 선을 보정

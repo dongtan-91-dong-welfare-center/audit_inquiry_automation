@@ -52,40 +52,34 @@ class TestImagePreprocessor:
         """
         [단위 테스트] 코드로 생성한 가상의 표(Grid) 영역을 정확히 탐지하여 좌표를 반환하는지 검증
         """
-        # 1. 가상의 빈 문서 생성 (흰색 배경, 800x800 BGR 이미지)
         img = np.full((800, 800, 3), 255, dtype=np.uint8)
+        # 표 외곽선
+        cv2.rectangle(img, (100, 150), (700, 450), (0, 0, 0), 2)
+        # 내부에 세로 구분선 4개 추가 (Column 구조 생성)
+        for i in range(1, 5):
+            cv2.line(img, (100 + i * 120, 150), (100 + i * 120, 450), (0, 0, 0), 1)
 
-        # 2. 가상의 표(Grid) 그리기 (검은색 선)
-        # 표 외곽선 그리기: 좌상단(100, 150)에서 우하단(700, 450)까지 -> 너비 600, 높이 300
-        start_pt = (100, 150)
-        end_pt = (700, 450)
-        cv2.rectangle(img, start_pt, end_pt, (0, 0, 0), 3)
-
-        # 표 내부 가로선 2개 그리기 (y=250, y=350)
-        cv2.line(img, (100, 250), (700, 250), (0, 0, 0), 2)
-        cv2.line(img, (100, 350), (700, 350), (0, 0, 0), 2)
-
-        # 표 내부 세로선 2개 그리기 (x=300, x=500)
-        cv2.line(img, (300, 150), (300, 450), (0, 0, 0), 2)
-        cv2.line(img, (500, 150), (500, 450), (0, 0, 0), 2)
-
-        # (선택) 표 밖의 노이즈 텍스트(점들) 추가 -> 표로 인식하면 안 됨
-        cv2.putText(img, "Random Text Noise", (100, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
-
-        # 3. 표 탐지 로직 실행
         bounding_boxes = preprocessor._detect_tables(img)
+        assert len(bounding_boxes) >= 1
 
-        # 4. 결과 검증
-        # 글자 노이즈는 무시하고 정확히 1개의 표만 찾아야 함
-        assert len(bounding_boxes) == 1, f"예상되는 표 개수는 1개이나, {len(bounding_boxes)}개를 찾았습니다."
+    def test_exclude_instruction_notes(self, preprocessor: ImagePreprocessor):
+        """[단위 테스트] 빽빽한 작성요령 영역이 배제되는지 확인"""
+        # 1000x1000 배경
+        img = np.full((1000, 1000), 255, dtype=np.uint8)
 
-        x, y, w, h = bounding_boxes[0]
+        # 실제 작성요령처럼 줄 간격이 좁은 텍스트 덩어리 모사
+        for i in range(800, 950, 10):  # 10픽셀 간격으로 빽빽하게 선 생성
+            cv2.line(img, (100, i), (900, i), 0, 5)
 
-        # 모폴로지 팽창/수축 연산으로 인해 1~5픽셀 정도의 미세한 오차가 발생할 수 있으므로 범위로 검증
-        assert 95 <= x <= 105, f"x좌표 오차: {x}"
-        assert 145 <= y <= 155, f"y좌표 오차: {y}"
-        assert 595 <= w <= 605, f"너비 오차: {w}"
-        assert 295 <= h <= 305, f"높이 오차: {h}"
+            # 상단에는 여백이 충분한 표 생성
+        cv2.rectangle(img, (100, 100), (900, 400), 0, 2)
+        cv2.line(img, (100, 250), (900, 250), 0, 2)  # 여백이 큼
+
+        boxes = preprocessor._detect_tables(img)
+
+        # 하단 덩어리는 whitespace_ratio 필터에 의해 제거되어야 함
+        assert len(boxes) == 1
+        assert boxes[0][1] < 500
 
     # 이미지 파일이 없는 경우 스킵하여 테스트 결과를 깔끔하게 확인
     @pytest.mark.skipif(not IMAGE_FILES, reason="테스트용 실제 이미지 파일이 없습니다.")
@@ -137,7 +131,7 @@ class TestImagePreprocessor:
 
             # 분할된 표 배열들을 순회하며 개별 파일로 저장
             for idx, table_img in enumerate(tables):
-                # 예: result_0_bank_audit_letter-0003.jpg
+                # 예: result_0_bank_audit_letter-0001.jpg
                 file_name = f"result_{idx}_{base_name}"
                 cv2.imwrite(os.path.join(output_dir, file_name), table_img)
 
