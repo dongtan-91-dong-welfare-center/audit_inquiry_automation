@@ -43,7 +43,7 @@ class ImagePreprocessor:
         kernel size가 커지면 연산량이 증가하고, 이미지가 너무 흐릿해져 글자를 인식하는 데 어려움 발생 가능
         -> ksize는 (3, 3) 또는 (5, 5)가 일반적
         """
-        processed_image = cv2.GaussianBlur(processed_image, (3, 3), 0)
+        processed_image = cv2.GaussianBlur(processed_image, (5, 5), 0)
 
         # 3. 어댑티브 임계값 처리(Adaptive Thresholding)로 이진화 수행
         """
@@ -57,7 +57,7 @@ class ImagePreprocessor:
         - 2 (C): 계산된 평균값에서 뺄 상수입니다. 노이즈를 미세하게 조절하여 배경을 더 깨끗하게 날리는 역할
         """
         processed_image = cv2.adaptiveThreshold(
-            processed_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
+            processed_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 1
         )
 
         # 4. 이미지 기울기 보정(Deskewing) 로직 호출
@@ -75,10 +75,12 @@ class ImagePreprocessor:
         - 닫힘: 팽창 후 침식(끊어진 선 연결)
         - 커널: 특정 픽셀을 검증하기 위해 주변을 살피는 범위
         """
-        kernel = np.ones((3, 3), np.uint8)
+        kernel = np.ones((2, 2), np.uint8)
 
-        processed = cv2.morphologyEx(processed_image, cv2.MORPH_OPEN, kernel)   # 열림
-        processed = cv2.morphologyEx(processed, cv2.MORPH_CLOSE, kernel)    # 닫힘
+        # processed = cv2.morphologyEx(processed_image, cv2.MORPH_OPEN, kernel)   # 열림
+        # processed = cv2.morphologyEx(processed, cv2.MORPH_CLOSE, kernel)    # 닫힘
+        processed = cv2.morphologyEx(processed_image, cv2.MORPH_CLOSE, kernel)    # 닫힘
+
 
         return processed
 
