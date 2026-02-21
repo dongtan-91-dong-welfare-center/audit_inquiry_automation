@@ -9,6 +9,10 @@ class ImagePreprocessor:
     """
     [비전 처리 담당자]
     OCR 인식률을 극대화하기 위해 이미지를 보정합니다.
+    # TODO: 표가 크롭된 이미지일 때, 외곽 테두리(표 선)가 1,000픽셀이고, 글자가 100픽셀일 때 기울기를 올바르게 계산할 수 있나 확인
+    # TODO: 글자가 있는 부분만 잘라서 각도를 계산하여 표 테두리에 의해 기울기에 영향을 받지 않도록 조정
+    # TODO: 글자 획이 얇아지면 커널 크기를 줄이거나 닫힘 연산을 조정하여 글자 연결성 확보
+    # TODO: 적응형 이진화 상수(C) 조정하여 글자가 얇아지거나 굵어지는 것을 방지
     """
     def enhance_image(self, image: np.ndarray) -> ndarray:
         """
@@ -59,7 +63,8 @@ class ImagePreprocessor:
         # 4. 이미지 기울기 보정(Deskewing) 로직 호출
         angle = self._get_skew_angle(processed_image)
         if abs(angle) > 0.5:    # 0.5도 미만의 미세한 기울기는 OCR 엔진이 자체적으로 허용 범위 내에서 처리할 수 있는 수준
-            processed_image = self._rotate_image(processed_image, angle)
+            # 기울어진 각도의 반대 방향으로 회전을 시켜야 수평을 맞출 수 있음
+            processed_image = self._rotate_image(processed_image, -angle)
 
         # 5. 모폴로지 팽창/침식 연산을 통해 끊어진 표의 선을 보정
         """
@@ -87,7 +92,6 @@ class ImagePreprocessor:
         Returns:
             보정해야 할 각도 (float)
         """
-        # TODO: 표가 크롭된 이미지일 때, 외곽 테두리(표 선)가 1,000픽셀이고, 글자가 100픽셀일 때 기울기를 올바르게 계산할 수 있나 확인
         # 1. 이미지 내의 텍스트 픽셀 좌표를 추출하여 회전 각도 산출
         """
         np.column_stack((array1, array2)): 두 배열을 옆으로 나란히 붙여서 2차원 배열(좌표 쌍)로 만듭니다.
@@ -110,20 +114,36 @@ class ImagePreprocessor:
             > (array([1, 2, 3, 3]), array([1, 1, 1, 2]))
         해석: 1행, 2행, 3행, 3행에 데이터가 있고 / 각 1열, 1열, 1열, 2열에 데이터가 있음
         """
-        coords = np.column_stack(np.where(binary_image < 127))  # 255 // 2 = 127 이므로 127보다 작은 것은 검정색이라고 인식
+        y_coords, x_coords = np.where(binary_image < 127)  # 255 // 2 = 127 이므로 127보다 작은 것은 검정색이라고 인식
 
-        # 2. 텍스트의 최소 면적 사각형(minAreaRect)을 찾아 수평 각도 산출
+        # 2. 좌표 순서 교정 (y, x) -> (x, y)
+        # openCV 함수는 (x, y) 형태의 좌표계를 사용
+        coords = np.column_stack((x_coords, y_coords))
+
+        # 3. 텍스트의 최소 면적 사각형(minAreaRect)을 찾아 수평 각도 산출
         """
         사각형을 회전시키며 글자 픽셀을 감싸는 넓이가 제일 작은 사각형을 찾는 함수
         이 때 사각형의 각도가 문서가 삐뚫어진 각도와 일치함
         binary_image는 배경이 255(흰색), 글자가 0(검은색)이므로 반전시켜 좌표를 추출
         """
-        angle = cv2.minAreaRect(coords)[-1]
+        if not len(coords):
+            return 0.0
 
-        # OpenCV 각도 계산 방식에 따른 보정
-        if angle > 45: angle -= 90
+        # 반시계 방향으로 기울어지면 양수, 시계 방향으로 기울어지면 음수 반환
+        # 이미지 좌표계는 아래로 내려갈수록 Y의 값이 커짐
+        rect = cv2.minAreaRect(coords)
+        angle = rect[-1]
+        width, height = rect[1]
 
-        return angle
+        # 4. 사각형의 가로/세로 길이를 비교하여 긴 변을 기준으로 각도를 보정
+        if width < height: angle += 90
+
+        # 5. 가장 가까운 수평/수직 축과의 차이를 계산
+        # (angle + 45) % 90 - 45 는 항상 각도를 [-45, 45]로 매핑함
+        # 그 후, 이미지 좌표계(y-down) 특성을 반영하여 부호를 반전시킴
+        skew_angle =  -((angle + 45) % 90 - 45)
+
+        return skew_angle
 
     @staticmethod
     def _rotate_image(image: np.ndarray, angle: float) -> np.ndarray:
