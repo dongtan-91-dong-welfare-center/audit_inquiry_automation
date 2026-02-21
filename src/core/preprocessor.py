@@ -8,32 +8,159 @@ from numpy import ndarray
 class ImagePreprocessor:
     """
     [비전 처리 담당자]
-    OCR 인식률을 극대화하기 위해 이미지를 보정합니다.
+    OpenCV를 활용하여 문서 이미지의 기울기를 보정하고, 표 영역을 탐지하여 잘라낸 뒤,
+    OCR 인식률을 극대화하기 위해 각 표의 이미지를 보정합니다.
     # TODO: 표가 크롭된 이미지일 때, 외곽 테두리(표 선)가 1,000픽셀이고, 글자가 100픽셀일 때 기울기를 올바르게 계산할 수 있나 확인
-    # TODO: 글자가 있는 부분만 잘라서 각도를 계산하여 표 테두리에 의해 기울기에 영향을 받지 않도록 조정
-    # TODO: 글자 획이 얇아지면 커널 크기를 줄이거나 닫힘 연산을 조정하여 글자 연결성 확보
-    # TODO: 적응형 이진화 상수(C) 조정하여 글자가 얇아지거나 굵어지는 것을 방지
     """
-    def enhance_image(self, image: np.ndarray) -> ndarray:
+
+    def process_page(self, page_image: np.ndarray) -> list[np.ndarray]:
         """
-        단일 이미지를 입력받아 노이즈 제거 및 보정을 수행합니다.
-        흐름: 그레이스케일 -> 블러링 -> 이진화 -> 기울기 보정 -> 모폴로지(열림/닫힘)
+        단일 페이지 이미지를 입력받아 전체 흐름(기울기 보정 -> 표 탐지 -> 크롭 -> 개별 전처리)을 제어합니다.
 
         Args:
-            image (numpy.ndarray): OpenCV로 읽어온 BGR 이미지 데이터
+            page_image (np.ndarray): PDFLoader에서 전달받은 1페이지 분량의 원본 이미지(BGR)
 
         Returns:
-            numpy.ndarray: 전처리가 완료된 이미지
+            list[np.ndarray]: 전처리가 완료된 '표 영역 이미지'의 리스트
         """
-        # 1. 그레이스케일(Grayscale)  변환 수행
+        processed_tables = []
+
+        # 1. 페이지 전체 기울기 보정(Deskew) 로직 호출
+        # 원본 BGR 이미지를 임시로 그레이스케일로 변환하여 각도 계산에 사용
+        if len(page_image.shape) == 3:
+            gray_for_skew = cv2.cvtColor(page_image, cv2.COLOR_BGR2GRAY)
+        else:
+            gray_for_skew = page_image
+
+        angle = self._get_skew_angle(gray_for_skew)
+        if abs(angle) > 0.5:    # 0.5도 미만의 미세한 기울기는 OCR 엔진이 자체적으로 허용 범위 내에서 처리할 수 있는 수준
+            # 표 외곽선을 정확히 찾기 위해 페이지 전체의 수평을 먼저 맞춥니다.
+            # 기울어진 각도의 반대 방향으로 회전을 시켜야 수평을 맞출 수 있음
+            page_image = self._rotate_image(page_image, -angle)
+
+        # 2. 표 영역 탐지 (Table Detection)
+        # TODO: _detect_tables 메서드를 호출하여 표들의 Bounding Box (x, y, w, h) 리스트를 획득
+        bounding_boxes = self._detect_tables(page_image)
+
+        # 3. 크롭 및 개별 전처리 수행
+        for (x, y, w, h) in bounding_boxes:
+            # TODO: numpy 슬라이싱(page_image[y:y+h, x:x+w])을 사용하여 표 영역만 크롭
+            cropped_table = page_image[y:y+h, x:x+w]
+
+            # TODO: 크롭된 이미지를 enhance_image()에 넘겨 이진화/노이즈 제거 등의 전처리 수행
+            enhanced_table = self.enhance_image(cropped_table)
+
+            # TODO: 처리된 표 이미지를 processed_tables 리스트에 추가
+            processed_tables.append(enhanced_table)
+            pass
+
+        return processed_tables
+
+    @staticmethod
+    def _detect_tables(image: np.ndarray) -> list[tuple[int, int, int, int]]:
+        """
+        이미지를 극단적으로 변형하여 글자는 지우고 표의 '선'만 추출해 좌표를 반환합니다.
+        여기서 변환된 이미지는 반환되지 않고 버려집니다.
+
+        Args:
+            image (np.ndarray): 기울기가 보정된 전체 페이지 이미지 (BGR 또는 Grayscale)
+
+        Returns:
+            list[tuple[int, int, int, int]]: 탐지된 표들의 (x, y, w, h) 좌표 리스트 (위에서 아래 순서로 정렬 권장)
+        """
+        # 1. 그레이스케일(Grayscale) 변환
         """
         numpy.ndarray.shape: 배열의 차원을 나타내는 함수
         컬러이미지의 배열: (세로, 가로, 3), 흑백이미지의 배열: (세로, 가로)
         """
         if len(image.shape) == 3:  # 컬러 이미지인 경우
-            processed_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)   # 흑백 이미지로 변환
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)   # 흑백 이미지로 변환
         else:
-            processed_image = image.copy()
+            gray = image.copy()
+
+        # 2. 어댑티브 임계값 처리(Adaptive Thresholding)로 이진화 수행
+        """
+        어댑티브 임계값: 전체 이미지의 평균을 기준으로 0(검정)과 255(하양)로 구분하는 것이 아니라
+        이미지를 작은 구역으로 나누어 임계값마다 배경은 하얗게(255), 글자는 까맣게(0) 처리
+        -> 스캔 문서에서 명암 차이에서도 글자를 잘 찾아내게 함
+        - 255: 임계값을 넘었을 때 부여할 최대값으로 흰색을 만들어야 하므로 255 고정
+        - cv2.ADAPTIVE_THRESH_GAUSSIAN_C: 주변 영역의 평균을 구할 때 중앙부 픽셀에 가중치를 두어 조명 변화에 더 유연하게 대응하기 위한 가우시안 가중치
+        - cv2.THRESH_BINARY: 기준보다 밝으면 255, 어두우면 0으로 나누는 이진화 방식
+        - 11 (blockSize): 임계값을 계산할 주변 영역의 크기(11x11)입니다. 글자의 획 굵기보다 충분히 커야 글자와 배경을 구분 가능
+        - 1 (C): 계산된 평균값에서 뺄 상수입니다. 노이즈를 미세하게 조절하여 배경을 더 깨끗하게 날리는 역할
+        """
+        binary = cv2.adaptiveThreshold(
+            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 0
+        )
+
+        # 이미지의 가로, 세로 길이 파악 (선 추출 커널의 기준 길이가 됨)
+        height, width = binary.shape
+
+        # TODO: 형태학적 연산(Morphology)을 사용하여 가로선과 세로선을 추출 (cv2.getStructuringElement 활용)
+        # 3. 모폴로지: 아주 길쭉한 커널을 사용하여 글자는 다 지우고 '긴 가로선'과 '긴 세로선'만 남김
+        # 3-1. 가로선 추출 (Horizontal Line Detection)
+        # 너비의 1/40 정도 길이를 가진 가로 커널 생성 (이 값은 문서 내 표의 크기에 따라 튜닝 필요)
+        horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (width // 40, 1))
+        # 열림(Open) 연산: 커널 크기보다 작은 노이즈(일반 텍스트)는 지우고, 긴 가로선만 남김
+        detect_horizontal = cv2.morphologyEx(binary, cv2.MORPH_OPEN, horizontal_kernel, iterations=2)
+
+        # 3-2. 세로선 추출 (Vertical Line Detection)
+        # 높이의 1/40 정도 길이를 가진 세로 커널 생성
+        vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, height // 40))
+        detect_vertical = cv2.morphologyEx(binary, cv2.MORPH_OPEN, vertical_kernel, iterations=2)
+
+        # TODO: 가로선과 세로선을 합성하여 표의 뼈대(Grid) 이미지를 생성
+        # 4. 가로선과 세로선 병합 (표 뼈대 완성)
+        # 두 이미지를 OR 연산하여 가로선과 세로선이 모두 포함된 온전한 표의 격자(Grid) 생성
+        table_mask = cv2.bitwise_or(detect_horizontal, detect_vertical)
+
+        # TODO: cv2.findContours를 사용하여 뼈대 이미지에서 외곽선(표 덩어리) 찾기
+        # 5. 윤곽선(Contours) 찾기
+        # RETR_EXTERNAL: 표 내부의 셀이 아닌, 가장 바깥쪽 외곽선(표 전체)만 추출
+        contours, _ = cv2.findContours(table_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        # TODO: 지나치게 작은 노이즈 영역은 면적(cv2.contourArea)을 기준으로 필터링하여 제외
+        bounding_boxes = []
+        # 노이즈를 걸러내기 위한 최소 면적 기준 (전체 이미지 면적의 1% 이상인 것만 표로 간주)
+        min_table_area = (width * height) * 0.01
+
+        # TODO: 찾아낸 윤곽선을 감싸는 사각형 좌표(cv2.boundingRect) 추출
+        # 7. 조건에 맞는 윤곽선만 사각형 좌표로 변환
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            if area > min_table_area:
+                x, y, w, h = cv2.boundingRect(contour)
+
+                # 표가 너무 얇은 경우(예: 단순 분리선) 제외하기 위한 비율(Ratio) 검증 추가 가능
+                if w > 50 and h > 50:
+                    bounding_boxes.append((x, y, w, h))
+
+        # TODO: 문서 상단부터 하단 순서(Y축 기준)로 좌표 리스트를 정렬하여 반환
+        # 8. Y좌표(위->아래)를 기준으로 정렬
+        # 문서 상단에 있는 표부터 순차적으로 OCR 및 데이터를 추출하기 위함
+        bounding_boxes.sort(key=lambda box: box[1])
+
+        return bounding_boxes
+
+    @staticmethod
+    def enhance_image(cropped_image: np.ndarray) -> ndarray:
+        """
+        원본 해상도를 유지한 잘라낸 표 이미지를 입력받아 노이즈를 제거하고 글씨를 뚜렷하게 이진화합니다.
+        흐름: 그레이스케일 -> 블러링 -> 이진화 -> 모폴로지(열림/닫힘)
+
+        Args:
+            cropped_image (numpy.ndarray): OpenCV로 읽어온 BGR 이미지 데이터
+
+        Returns:
+            numpy.ndarray: 전처리가 완료된 이미지
+        """
+        # TODO: 크롭된 표 내부에서도 미세하게 틀어진 각도가 있다면 추가 Deskew 고려
+
+        # 1. 그레이스케일 변환 (크롭된 이미지가 컬러일 수 있으므로 필수)
+        if len(cropped_image.shape) == 3:
+            processed = cv2.cvtColor(cropped_image, cv2.COLOR_BGR2GRAY)
+        else:
+            processed = cropped_image.copy()
 
         # 2. 가우시안 블러(Gaussian Blur)를 적용하여 미세한 스캔 노이즈 제거
         """
@@ -43,30 +170,14 @@ class ImagePreprocessor:
         kernel size가 커지면 연산량이 증가하고, 이미지가 너무 흐릿해져 글자를 인식하는 데 어려움 발생 가능
         -> ksize는 (3, 3) 또는 (5, 5)가 일반적
         """
-        processed_image = cv2.GaussianBlur(processed_image, (5, 5), 0)
+        processed_image = cv2.GaussianBlur(processed, (5, 5), 0)
 
-        # 3. 어댑티브 임계값 처리(Adaptive Thresholding)로 이진화 수행
-        """
-        어댑티브 임계값: 전체 이미지의 평균을 기준으로 0(검정)과 255(하양)로 구분하는 것이 아니라
-        이미지를 작은 구역으로 나누어 임계값마다 배경은 하얗게(255), 글자는 까맣게(0) 처리
-        -> 스캔 문서에서 명암 차이에서도 글자를 잘 찾아내게 함
-        - 255: 임계값을 넘었을 때 부여할 최대값으로 흰색을 만들어야 하므로 255 고정
-        - cv2.ADAPTIVE_THRESH_GAUSSIAN_C: 주변 영역의 평균을 구할 때 중앙부 픽셀에 가중치를 두어 조명 변화에 더 유연하게 대응하기 위한 가우시안 가중치
-        - cv2.THRESH_BINARY: 기준보다 밝으면 255, 어두우면 0으로 나누는 이진화 방식
-        - 11 (blockSize): 임계값을 계산할 주변 영역의 크기(11x11)입니다. 글자의 획 굵기보다 충분히 커야 글자와 배경을 구분 가능
-        - 2 (C): 계산된 평균값에서 뺄 상수입니다. 노이즈를 미세하게 조절하여 배경을 더 깨끗하게 날리는 역할
-        """
-        processed_image = cv2.adaptiveThreshold(
-            processed_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 1
+        # 3. 이진화 (여기서는 INV를 쓰지 않음. 일반 문서처럼 배경은 하얗게, 글자는 까맣게)
+        processed = cv2.adaptiveThreshold(
+            processed_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
         )
 
-        # 4. 이미지 기울기 보정(Deskewing) 로직 호출
-        angle = self._get_skew_angle(processed_image)
-        if abs(angle) > 0.5:    # 0.5도 미만의 미세한 기울기는 OCR 엔진이 자체적으로 허용 범위 내에서 처리할 수 있는 수준
-            # 기울어진 각도의 반대 방향으로 회전을 시켜야 수평을 맞출 수 있음
-            processed_image = self._rotate_image(processed_image, -angle)
-
-        # 5. 모폴로지 팽창/침식 연산을 통해 끊어진 표의 선을 보정
+        # 4. 모폴로지 팽창/침식 연산을 통해 끊어진 표의 선을 보정
         """
         모톨로지 연산: 이미지의 형태를 변경하는 연산
         - 팽창: 글자를 두껍게 하여 이미지의 형태를 변경하는 연산
@@ -76,11 +187,7 @@ class ImagePreprocessor:
         - 커널: 특정 픽셀을 검증하기 위해 주변을 살피는 범위
         """
         kernel = np.ones((2, 2), np.uint8)
-
-        # processed = cv2.morphologyEx(processed_image, cv2.MORPH_OPEN, kernel)   # 열림
-        # processed = cv2.morphologyEx(processed, cv2.MORPH_CLOSE, kernel)    # 닫힘
-        processed = cv2.morphologyEx(processed_image, cv2.MORPH_CLOSE, kernel)    # 닫힘
-
+        processed = cv2.morphologyEx(processed, cv2.MORPH_CLOSE, kernel)    # 닫힘
 
         return processed
 
@@ -94,7 +201,11 @@ class ImagePreprocessor:
         Returns:
             보정해야 할 각도 (float)
         """
-        # 1. 이미지 내의 텍스트 픽셀 좌표를 추출하여 회전 각도 산출
+        # 1. Otsu의 이진화로 조명/그림자에 강건하게 배경과 텍스트 분리
+        # 반전(INV)를 주어 글자를 255(흰색)으로 만듭니다.
+        _, thresh = cv2.threshold(binary_image, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
+
+        # 2. 이미지 내의 텍스트 픽셀 좌표를 추출하여 회전 각도 산출
         """
         np.column_stack((array1, array2)): 두 배열을 옆으로 나란히 붙여서 2차원 배열(좌표 쌍)로 만듭니다.
             > np.column_stack(([1, 2, 3, 3], [1, 1, 1, 2]))
@@ -116,7 +227,7 @@ class ImagePreprocessor:
             > (array([1, 2, 3, 3]), array([1, 1, 1, 2]))
         해석: 1행, 2행, 3행, 3행에 데이터가 있고 / 각 1열, 1열, 1열, 2열에 데이터가 있음
         """
-        y_coords, x_coords = np.where(binary_image < 127)  # 255 // 2 = 127 이므로 127보다 작은 것은 검정색이라고 인식
+        y_coords, x_coords = np.where(thresh > 0)   # 흰색 픽셀을 탐색
 
         # 2. 좌표 순서 교정 (y, x) -> (x, y)
         # openCV 함수는 (x, y) 형태의 좌표계를 사용
@@ -150,7 +261,7 @@ class ImagePreprocessor:
     @staticmethod
     def _rotate_image(image: np.ndarray, angle: float) -> np.ndarray:
         """
-        주어진 각도만큼 이미지를 아핀 변환(Affine Transformation)을 통해 회전시킵니다.
+        주어진 각도만큼 아핀 변환(Affine Transformation)을 통해 이미지를 회전시킵니다.
         """
         h, w = image.shape[:2]
         center = (w // 2, h // 2)
