@@ -14,8 +14,8 @@ class ExcelBuilder:
         """
         # TODO: io.BytesIO()를 사용해 메모리 버퍼 생성
         # TODO: pd.ExcelWriter를 사용하여 final_df를 버퍼에 작성 (엔진: openpyxl 등)
-        
+
         # TODO: (선택) 금액 컬럼 콤마(,) 서식 지정, 헤더 셀 배경색 등 엑셀 스타일링 적용
-        
-        # return 바이트 데이터 (Streamlit st.download_button의 data 파라미터로 전달용)
+
+        # return 바이트 데이터 (Streamlit st.download_button의 input 파라미터로 전달용)
         pass
