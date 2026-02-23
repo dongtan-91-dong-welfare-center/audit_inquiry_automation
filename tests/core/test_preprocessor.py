@@ -7,7 +7,7 @@ import glob
 from src.core.preprocessor import ImagePreprocessor
 
 # 테스트 파일 목록 자동 추출
-IMAGE_FILES = glob.glob("tests/input/*.jpg")
+IMAGE_FILES = glob.glob("tests/data/input/*.jpg")
 
 class TestImagePreprocessor:
     # 테스트를 수행하기 위해 미리 준비해야 하는 환경을 정의하는 데코레이터
@@ -25,6 +25,7 @@ class TestImagePreprocessor:
         expected_angle = 10.0
         # 200x200 흰색 배경에 검은색 긴 막대(텍스트 대용) 생성
         img = np.full((200, 200), 255, dtype=np.uint8)
+        # 배열, 시작점, 끝점, 색상, 두께
         cv2.rectangle(img, (50, 90), (150, 110), 0, -1)
 
         # 정확히 expected_angle 만큼 회전
@@ -40,18 +41,20 @@ class TestImagePreprocessor:
     def test_enhance_image_logic_branches(self, preprocessor: ImagePreprocessor):
         """
         [단위 테스트] 컬러 이미지는 흑백으로, 이미 흑백인 이미지는 그대로 처리되는지 검증
+        # TODO: 흑백으로만 바뀌었는지 확인하는 것이 아니라 enhance image의 실제 효과에 대해 검증하는 로직 강화 (예: 노이즈 제거, 명암 개선 등)
         """
         color_img = np.zeros((10, 10, 3), dtype=np.uint8)
         gray_img = np.zeros((10, 10), dtype=np.uint8)
 
         # len으로 채널의 수를 확인하는 이유는 array(array(), array(), ..., array()) 형태로 되어 있기 때문
-        assert len(preprocessor.enhance_image(color_img).shape) == 2
-        assert len(preprocessor.enhance_image(gray_img).shape) == 2
+        assert len(preprocessor._enhance_image(color_img).shape) == 2
+        assert len(preprocessor._enhance_image(gray_img).shape) == 2
 
     def test_detect_tables_logic(self, preprocessor: ImagePreprocessor):
         """
         [단위 테스트] 코드로 생성한 가상의 표(Grid) 영역을 정확히 탐지하여 좌표를 반환하는지 검증
         """
+        # 800x800 흰색 배경 생성
         img = np.full((800, 800, 3), 255, dtype=np.uint8)
         # 표 외곽선
         cv2.rectangle(img, (100, 150), (700, 450), (0, 0, 0), 2)
@@ -71,7 +74,7 @@ class TestImagePreprocessor:
         for i in range(800, 950, 10):  # 10픽셀 간격으로 빽빽하게 선 생성
             cv2.line(img, (100, i), (900, i), 0, 5)
 
-            # 상단에는 여백이 충분한 표 생성
+        # 상단에는 여백이 충분한 표 생성
         cv2.rectangle(img, (100, 100), (900, 400), 0, 2)
         cv2.line(img, (100, 250), (900, 250), 0, 2)  # 여백이 큼
 
@@ -118,7 +121,7 @@ class TestImagePreprocessor:
         if not IMAGE_FILES:
             pytest.skip("샘플 파일 없음")
 
-        output_dir = "tests/output"
+        output_dir = "tests/data/output"
         os.makedirs(output_dir, exist_ok=True)
 
         for path in IMAGE_FILES[:2]:  # 상위 2개만 샘플링
@@ -135,4 +138,4 @@ class TestImagePreprocessor:
                 file_name = f"result_{idx}_{base_name}"
                 cv2.imwrite(os.path.join(output_dir, file_name), table_img)
 
-        print(f"\n[알림] 분할/전처리된 표 이미지들이 {output_dir}에 저장되었습니다. 직접 확인해 보세요!")
+        print(f"\n[알림] 분할/전처리된 표 이미지 들이 {output_dir}에 저장되었습니다. 직접 확인해 보세요!")
