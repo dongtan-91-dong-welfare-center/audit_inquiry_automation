@@ -41,8 +41,8 @@ class TestImagePreprocessor:
     def test_enhance_image_logic_branches(self, preprocessor: ImagePreprocessor):
         """
         [단위 테스트] 컬러 이미지는 흑백으로, 이미 흑백인 이미지는 그대로 처리되는지 검증
-        # TODO: 흑백으로만 바뀌었는지 확인하는 것이 아니라 enhance image의 실제 효과에 대해 검증하는 로직 강화 (예: 노이즈 제거, 명암 개선 등)
         """
+        # 1. 입력 채널 처리 분기 테스트 (컬러/흑백 모두 2차원 흑백 결과물 반환 확인)
         color_img = np.zeros((10, 10, 3), dtype=np.uint8)
         gray_img = np.zeros((10, 10), dtype=np.uint8)
 
@@ -50,20 +50,71 @@ class TestImagePreprocessor:
         assert len(preprocessor._enhance_image(color_img).shape) == 2
         assert len(preprocessor._enhance_image(gray_img).shape) == 2
 
+        # 2. 이미지 개선 효과 정밀 검증 (노이즈 제거 및 선명도)
+        # 100x100 크기의 연한 회색(200) 배경 이미지 생성
+        test_img = np.full((100, 100), 200, dtype=np.uint8)
+        
+        # 가상의 '글자' 추가: 진한 회색(50)으로 선을 그음
+        cv2.line(test_img, (20, 50), (80, 50), 50, 3)
+        
+        # 가상의 '노이즈' 추가: 배경과 대비되는 아주 검은 점(0)을 찍음
+        test_img[10, 10] = 0
+
+        # 전처리 실행
+        enhanced = preprocessor._enhance_image(test_img)
+
+        # 반드시 이진 이미지(0과 255로만 구성)여야 함
+        unique_values = np.unique(enhanced)
+        assert set(unique_values).issubset({0, 255}), "결과물이 이진화되지 않았습니다."
+
+        # 노이즈 제거 확인
+        # Gaussian Blur(5x5)와 Adaptive Thresholding에 의해 단일 픽셀 노이즈는 배경색(255)으로 동화되어야 함
+        assert enhanced[10, 10] == 255, "단일 픽셀 노이즈가 제거되지 않았습니다."
+
+        # 글자 보존 및 명암 개선 확인
+        # 원본에서 진한 회색(50)이었던 글자 영역은 전처리 후 완전한 검은색(0)이 되어야 함
+        assert enhanced[50, 50] == 0, "글자 영역이 검은색으로 선명하게 처리되지 않았습니다."
+        
+        # 배경 보존 확인
+        # 글자가 없는 일반 배경 영역은 완전한 흰색(255)이 되어야 함
+        assert enhanced[20, 20] == 255, "배경 영역이 흰색으로 정돈되지 않았습니다."
+
     def test_detect_tables_logic(self, preprocessor: ImagePreprocessor):
         """
         [단위 테스트] 코드로 생성한 가상의 표(Grid) 영역을 정확히 탐지하여 좌표를 반환하는지 검증
         """
+        # 1. 테스트용 가상 표 생성 정보 정의
+        expected_x, expected_y = 100, 150
+        expected_w, expected_h = 600, 300  # (700-100), (450-150)
+        
         # 800x800 흰색 배경 생성
         img = np.full((800, 800, 3), 255, dtype=np.uint8)
-        # 표 외곽선
-        cv2.rectangle(img, (100, 150), (700, 450), (0, 0, 0), 2)
+        
+        # 표 외곽선 그리기 (100, 150)에서 (700, 450)까지
+        cv2.rectangle(img, (expected_x, expected_y), (700, 450), (0, 0, 0), 2)
+        
         # 내부에 세로 구분선 4개 추가 (Column 구조 생성)
         for i in range(1, 5):
             cv2.line(img, (100 + i * 120, 150), (100 + i * 120, 450), (0, 0, 0), 1)
 
+        # 2. 표 탐지 실행
         bounding_boxes = preprocessor._detect_tables(img)
+        
+        # 3. 정밀 검증 로직
+        # 탐지된 박스가 최소 1개 이상이어야 함
         assert len(bounding_boxes) >= 1
+        
+        # 첫 번째로 탐지된 박스(상단 정렬 기준)의 좌표 추출
+        detected_x, detected_y, detected_w, detected_h = bounding_boxes[0]
+        
+        # 허용 오차 범위 설정 (픽셀 단위)
+        # 이진화 및 팽창(Dilation) 과정에서 외곽선이 1~3픽셀 정도 확장될 수 있음을 고려
+        tolerance = 5
+        
+        assert abs(detected_x - expected_x) <= tolerance, f"X좌표 오차 초과: 예상 {expected_x}, 실제 {detected_x}"
+        assert abs(detected_y - expected_y) <= tolerance, f"Y좌표 오차 초과: 예상 {expected_y}, 실제 {detected_y}"
+        assert abs(detected_w - expected_w) <= tolerance, f"너비 오차 초과: 예상 {expected_w}, 실제 {detected_w}"
+        assert abs(detected_h - expected_h) <= tolerance, f"높이 오차 초과: 예상 {expected_h}, 실제 {detected_h}"
 
     def test_exclude_instruction_notes(self, preprocessor: ImagePreprocessor):
         """[단위 테스트] 빽빽한 작성요령 영역이 배제되는지 확인"""
@@ -84,6 +135,40 @@ class TestImagePreprocessor:
         assert len(boxes) == 1
         assert boxes[0][1] < 500
 
+    def test_empty_image_returns_empty_list(self, preprocessor: ImagePreprocessor):
+        """
+        [엣지 케이스] 글자나 표가 전혀 없는 빈 이미지가 들어왔을 때 빈 리스트를 반환하는지 검증
+        """
+        # 500x500 크기의 순백색(255) 이미지 생성
+        img = np.full((500, 500, 3), 255, dtype=np.uint8)
+        
+        # 처리 수행
+        tables = preprocessor.process_page(img)
+        
+        # 검증: 에러 없이 빈 리스트를 반환해야 함
+        assert isinstance(tables, list)
+        assert len(tables) == 0
+
+    def test_very_small_image_handling(self, preprocessor: ImagePreprocessor):
+        """
+        [엣지 케이스] 처리할 수 없을 정도로 작은 이미지(예: 10x10)가 들어왔을 때 
+        에러 없이 동작하며 빈 리스트를 반환하는지 검증
+        """
+        # 10x10 크기의 아주 작은 이미지 생성 
+        # (이진화 알고리즘의 blockSize인 21보다 작은 경우를 가정)
+        img = np.full((10, 10, 3), 255, dtype=np.uint8)
+        
+        try:
+            # 처리 수행
+            tables = preprocessor.process_page(img)
+            
+            # 검증: 에러 발생 없이 리스트 형태를 반환해야 함
+            assert isinstance(tables, list)
+            assert len(tables) == 0
+        except Exception as e:
+            # 에러가 발생하면 테스트 실패로 간주
+            pytest.fail(f"매우 작은 이미지를 처리하는 도중 예외가 발생했습니다: {e}")
+            
     # 이미지 파일이 없는 경우 스킵하여 테스트 결과를 깔끔하게 확인
     @pytest.mark.skipif(not IMAGE_FILES, reason="테스트용 실제 이미지 파일이 없습니다.")
     # 동일한 테스트 로직을 여러 개의 서로 다른 데이터로 반복해서 실행하는 데코레이터

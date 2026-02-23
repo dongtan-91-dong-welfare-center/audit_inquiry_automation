@@ -210,6 +210,7 @@ class ImagePreprocessor:
                 continue
 
             # 밀도 계산: 영역 내 실제 픽셀(글자/셀)이 차지하는 비율
+            # TODO: 팽창된 이미지로 위치를 찾되, 최종 좌표는 팽창 전 원본 이미지의 선에 맞게 보정하여 반환
             roi_binary = binary[y:y + h, x:x + w]
             density = cv2.countNonZero(roi_binary) / (w * h)
 
@@ -256,6 +257,8 @@ class ImagePreprocessor:
         kernel size가 커지면 연산량이 증가하고 너무 많이 흐릿해져 글자를 인식하는 데 어려움 발생 가능
         -> ksize는 (3, 3) 또는 (5, 5)가 일반적
         """
+        # TODO: 블러링 후에도 글자 경계가 너무 뭉개지는 경우, Bilateral Filter(양방향 필터)로 대체 고려
+        # TODO: Median Blur(중간값 필터)도 노이즈 제거에 효과적이므로, 블러링 방식과 커널 크기에 따른 OCR 인식률 테스트 필요
         processed_image = cv2.GaussianBlur(processed, (5, 5), 0)
 
         # 3. 이진화 (배경은 하얗게, 글자는 까맣게)
@@ -266,7 +269,7 @@ class ImagePreprocessor:
         cv2.THRESH_BINARY: 기준보다 밝으면 255, 어두우면 0으로 나누는 이진화 방식
         """
         processed = cv2.adaptiveThreshold(
-            processed_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 10
+            processed_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 3
         )
 
         # 4. 모폴로지 팽창/침식 연산을 통해 끊어진 표의 선을 보정
