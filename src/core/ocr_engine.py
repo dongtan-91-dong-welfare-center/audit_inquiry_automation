@@ -1,5 +1,5 @@
 #src/core/ocr_engine.py
-
+import re
 import cv2
 import pytesseract
 from pytesseract import Output
@@ -111,6 +111,18 @@ class OCRExtractor:
         parsed_rows = []
         for cluster in row_clusters:
             cluster.sort(key=lambda x: x['left'])
-            parsed_rows.append([x['text'] for x in cluster])
             
+            row_data = []
+            for x in cluster:
+                # 정규표현식으로 표 테두리 노이즈(|, 한글 ㅣ, 대괄호 등) 싹 지우기
+                cleaned_text = re.sub(r'[|ㅣ\[\]_]', '', x['text']).strip()
+                
+                # 노이즈를 지우고 나서도 글자가 남아있을 때만 리스트에 추가
+                if cleaned_text: 
+                    row_data.append(cleaned_text)
+            
+            # 텅 빈 줄이 아니면 최종 결과에 추가
+            if row_data:
+                parsed_rows.append(row_data)
+                
         return parsed_rows
