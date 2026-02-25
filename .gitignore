@@ -163,4 +163,7 @@ pyrightconfig.json
 # PyCharm 프로젝트 설정 전체 제외
 .idea/
 
+# Visual Studio Code 설정 파일
+.vscode/settings.json
+
 # https://www.toptal.com/developers/gitignore/api/python 끝
