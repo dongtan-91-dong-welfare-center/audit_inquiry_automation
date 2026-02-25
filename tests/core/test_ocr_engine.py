@@ -38,7 +38,7 @@ def test_ocr_pipeline_integration():
     print("\n▶ 3. OCR 엔진 구동 및 표 추출 중...")
     extractor = OCRExtractor(psm=6)
     
-    # [수정] 추출된 여러 개의 표 이미지에 대해 각각 OCR 실행
+    # 추출된 여러 개의 표 이미지에 대해 각각 OCR 실행
     for table_idx, processed_table in enumerate(processed_tables):
         print(f"\n================== [ 표 {table_idx + 1} 결과 ] ==================")
         
