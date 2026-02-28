@@ -28,10 +28,18 @@ class OCRExtractor:
         # - oem 3: LSTM 기반 OCR 엔진 사용(기본값)
         # - psm 6: 단일 균일 텍스트 블록 가정 (표 인식에 적합)
         # - lang: 인식할 언어 (예: 'kor+eng')
+
     def extract_table_data(self, processed_image: np.ndarray) -> List[List[str]]:
-        """
+       """
         OpenCV로 전처리된 이미지 배열을 받아 텍스트를 추출하고,
         표 형태의 2차원 리스트(List of Lists)로 변환하여 반환합니다.
+        
+        [아키텍처 설계 근거: List[List[str]] 변환 이유]
+        Tesseract(DataFrame 반환), Naver Clova / Google Vision API(JSON 반환) 등 
+        사용하는 OCR 프레임워크나 라이브러리에 따라 도출되는 결과값의 데이터 형태가 모두 다릅니다.
+        따라서 본 엔진의 최종 출력을 가장 범용적인 '2차원 문자열 리스트'로 표준화하여 반환함으로써, 
+        추후 다른 OCR 엔진으로 교체하더라도 뒷단의 정제 담당(postprocessor.py) 로직을 
+        수정할 필요가 없도록 유지보수성과 확장성을 확보하였습니다.
         
         Args:
             processed_image (np.ndarray): 전처리 파이프라인에서 넘어온 이미지 배열
@@ -71,6 +79,7 @@ class OCRExtractor:
         df['text'] = df['text'].astype(str).str.strip()
         
         # 3. 공백을 다듬었더니 아무것도 안 남은 텅 빈 문자열('') 쓰레기 데이터 날리기
+        #    df[조건]은 "불리언 인덱싱(Boolean Indexing)" 이라고 불리는 판다스의 기능입니다.
         df = df[df['text'] != '']
         
         # 상단(top) 좌표 기준으로 1차 정렬
@@ -81,7 +90,7 @@ class OCRExtractor:
             
         row_clusters = []
         # to_dict() 메서도는 기본적으로 열 단위로 묶음 생성
-        # DataFrame을 딕셔너리 리스트로 변환하여 순회하면서 행(Row) 단위로 묶음 생성
+        # DataFrame을 딕셔너리 리스트(ex : [{}])로 변환하여 순회하면서 행(Row) 단위로 묶음 생성
         items = df.to_dict('records')
         current_cluster = [items[0]]
         
@@ -114,12 +123,12 @@ class OCRExtractor:
             
             row_data = []
             for x in cluster:
-                # 정규표현식으로 표 테두리 노이즈(|, 한글 ㅣ, 대괄호 등) 싹 지우기
-                cleaned_text = re.sub(r'[|ㅣ\[\]_]', '', x['text']).strip()
+                # 위치 정보를 활용해 테이블 형태로 구조화가 끝났으니 딕셔너리에서 텍스트(알맹이)만 추출
+                raw_text = x['text'].strip()
                 
-                # 노이즈를 지우고 나서도 글자가 남아있을 때만 리스트에 추가
-                if cleaned_text: 
-                    row_data.append(cleaned_text)
+                # 텅 빈 문자열이 아닐 때만 리스트에 추가
+                if raw_text: 
+                    row_data.append(raw_text)
             
             # 텅 빈 줄이 아니면 최종 결과에 추가
             if row_data:

@@ -6,7 +6,7 @@ from typing import List
 class FinancialTableFormatter:
     """
     [금융상품(예·적금) 테이블 전용 포매터]
-    은행 조회서의 '예·적금' 테이블에서 Tesseract OCR이 흔히 발생시키는 
+    은행 조회서의 '금융상품' 테이블에서 Tesseract OCR이 흔히 발생시키는 
     특유의 오류(셀 쪼개짐, 기호 오인식 등)를 전용으로 교정하는 클래스입니다.
     
     * 상태를 저장할 필요가 없이 단순히 추출된 데이터를 가공하는 툴이기 때문에 모든 메서드는 @staticmethod 로 구성합니다.
@@ -24,15 +24,33 @@ class FinancialTableFormatter:
         """
         processed_data = []
         for row in extracted_rows:
-            # 1. 구조적 오류 수정: 쪼개진 상품명 및 계좌번호를 하나로 병합
-            merged_row = FinancialTableFormatter._merge_split_cells(row)
+            # 1. ocr_engine에서 넘어온 가장 날것의 데이터에서 공통 노이즈 먼저 제거
+            cleaned_row = FinancialTableFormatter._remove_noise(row)
             
-            # 2. 내용적 오류 수정: 금액 콤마, 오타 등 텍스트 디테일 교정
+            # 2. 구조적 오류 수정: 쪼개진 상품명 및 계좌번호 병합
+            merged_row = FinancialTableFormatter._merge_split_cells(cleaned_row)
+            
+            # 3. 내용적 오류 수정: 금액 콤마, 오타 등 텍스트 교정
             formatted_row = FinancialTableFormatter._format_cells(merged_row)
             
-            processed_data.append(formatted_row)
+            # 노이즈가 제거되어 텅 비어버린 리스트(행)는 최종 결과에서 제외
+            if formatted_row:
+                processed_data.append(formatted_row)
             
         return processed_data
+
+    @staticmethod
+    def _remove_noise(row: List[str]) -> List[str]:
+        """
+        (내부 헬퍼) 표 테두리 노이즈(|, 한글 ㅣ, 대괄호 등)를 가장 먼저 제거합니다.
+        """
+        cleaned = []
+        for item in row:
+            text = re.sub(r'[|ㅣ\[\]_]', '', item).strip()
+            # 노이즈를 지우고 나서 글자가 남아있는 경우에만 담기
+            if text:
+                cleaned.append(text)
+        return cleaned
 
     @staticmethod
     def _merge_split_cells(row: List[str]) -> List[str]:
