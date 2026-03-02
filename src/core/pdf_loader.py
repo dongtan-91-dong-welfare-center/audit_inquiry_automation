@@ -53,7 +53,7 @@ class PDFLoader:
                 # 변환이 완료된 BGR 이미지 배열을 리스트에 담아 반환
                 all_pages_bgr.append(img_bgr)
 
-        return all_pages_bgr
+        return all_pages_bgr[2:]
 
     def _extract_native_text_or_tables(self):
         """
