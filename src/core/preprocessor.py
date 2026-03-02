@@ -63,7 +63,7 @@ class ImagePreprocessor:
 
         # 4. 결과 반환 (표를 찾지 못한 경우 전체 페이지 반환)
         if not table_data:
-            return [upscaled]
+            return []
 
         # 문서를 읽는 일반적인 순서(위에서 아래, 왼쪽에서 오른쪽)로 정렬
         table_data.sort(key=lambda s: (s['y'], s['x']))
