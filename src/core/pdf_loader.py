@@ -1,5 +1,8 @@
 # src/core/pdf_loader.py
+import pdfplumber
 import numpy as np
+import cv2
+from PIL import Image
 
 
 class PDFLoader:
@@ -32,7 +35,27 @@ class PDFLoader:
         # TODO: 렌더링된 PIL 객체(기본 RGB 포맷)를 numpy.ndarray로 변환
         # TODO: cv2.cvtColor를 사용하여 RGB 채널을 OpenCV 기본 포맷인 BGR 채널로 변경
         # TODO: 변환이 완료된 BGR 이미지 배열을 리스트에 담아 반환 (대용량 파일 대비 제너레이터(yield) 패턴 사용 고려)
-        pass
+
+        all_pages_bgr = []
+
+        # pdfplumber.open(self.uploaded_file)을 사용하여 PDF 스트림 열기
+        with pdfplumber.open(self.uploaded_file) as pdf:
+            # pdf 내의 각 페이지(pages 속성)를 순회하는 반복문 작성
+            for page in pdf.pages:
+                # page.to_image(resolution=300)을 호출하여 각 페이지를 고해상도 이미지(PIL 객체)로 렌더링
+                img_pil = page.to_image(resolution=300).original    # resolution=300은 OCR 인식률 향상을 위한 고해상도 설정
+
+                # 렌더링된 PIL 객체(기본 RGB 포맷)를 numpy.ndarray로 변환
+                img_array = np.array(img_pil)
+
+                # cv2.cvtColor를 사용하여 RGB 채널을 OpenCV 기본 포맷인 BGR 채널로 변경
+                # PIL은 기본적으로 RGB 포맷이므로 OpenCV 처리를 위해 BGR로 변환이 필요
+                img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+
+                # 변환이 완료된 BGR 이미지 배열을 리스트에 담아 반환
+                all_pages_bgr.append(img_bgr)
+
+        return all_pages_bgr
 
     def _extract_native_text_or_tables(self):
         """
