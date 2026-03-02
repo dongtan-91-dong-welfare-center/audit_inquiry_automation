@@ -20,7 +20,7 @@ class PDFLoader:
 
         # TODO: 파일명 유효성 및 확장자(.pdf) 검증 로직 추가 (validators.py 등 외부 유틸리티 연동 고려)
 
-    def convert_to_images(self) -> list[np.ndarray]:
+    def convert_to_images(self, start_page: int = 3) -> list[np.ndarray]:
         """
         PDF의 각 페이지를 순회하며 OpenCV에서 처리 가능한 고해상도(300 DPI) BGR 이미지 배열로 변환합니다.
 
@@ -38,8 +38,10 @@ class PDFLoader:
 
         # pdfplumber.open(self.uploaded_file)을 사용하여 PDF 스트림 열기
         with pdfplumber.open(self.uploaded_file) as pdf:
+            target_pages = pdf.pages[start_page - 1:]   # 인덱스는 0부터 시작
+
             # pdf 내의 각 페이지(pages 속성)를 순회하는 반복문 작성
-            for page in pdf.pages:
+            for page in target_pages:
                 # page.to_image(resolution=300)을 호출하여 각 페이지를 고해상도 이미지(PIL 객체)로 렌더링
                 img_pil = page.to_image(resolution=300).original    # resolution=300은 OCR 인식률 향상을 위한 고해상도 설정
 
@@ -53,7 +55,7 @@ class PDFLoader:
                 # 변환이 완료된 BGR 이미지 배열을 리스트에 담아 반환
                 all_pages_bgr.append(img_bgr)
 
-        return all_pages_bgr[2:]
+        return all_pages_bgr
 
     def _extract_native_text_or_tables(self):
         """
