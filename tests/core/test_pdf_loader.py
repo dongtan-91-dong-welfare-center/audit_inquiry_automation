@@ -2,11 +2,21 @@
 import pytest
 import numpy as np
 import os
+import cv2
 import pdfplumber
 from src.core.pdf_loader import PDFLoader
 
 
 class TestPDFLoader:
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        """
+        테스트 결과물을 저장할 디렉토리를 준비합니다.
+        """
+        self.output_dir = "tests/data/output"
+        if not os.path.exists(self.output_dir):
+            os.makedirs(self.output_dir)
+
     @pytest.fixture
     def scan_pdf_path(self):
         """
@@ -16,6 +26,29 @@ class TestPDFLoader:
         if not os.path.exists(path):
             pytest.skip(f"테스트용 스캔본 파일이 없습니다: {path}")
         return path
+
+    def test_convert_to_images_and_visualize(self, scan_pdf_path):
+        """
+        PDF를 이미지로 변환하고 결과물을 저장합니다.
+        """
+        with open(scan_pdf_path, "rb") as f:
+            loader = PDFLoader(f)
+            images = loader.convert_to_images()
+
+        assert len(images) > 0, "변환된 이미지가 없습니다."
+
+        # PDF 파일명 추출 (확장자 제외)
+        pdf_name = os.path.splitext(os.path.basename(scan_pdf_path))[0]
+
+        for i, img in enumerate(images):
+            # 저장 경로 설정: tests/data/output/debug_loader_page_0.jpg
+            output_path = os.path.join(self.output_dir, f"debug_loader_{pdf_name}_p{i}.jpg")
+
+            # OpenCV를 사용하여 BGR 이미지 저장
+            success = cv2.imwrite(output_path, img)
+
+            assert success, f"이미지 저장에 실패했습니다: {output_path}"
+            print(f"이미지 저장 완료: {output_path}")
 
     def test_convert_to_images_page_count(self, scan_pdf_path):
         """
