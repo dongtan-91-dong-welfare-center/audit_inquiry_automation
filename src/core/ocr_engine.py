@@ -29,10 +29,10 @@ class OCRExtractor:
         # - psm 6: 단일 균일 텍스트 블록 가정 (표 인식에 적합)
         # - lang: 인식할 언어 (예: 'kor+eng')
 
-    def extract_table_data(self, processed_image: np.ndarray) -> List[List[str]]:
-       """
-        OpenCV로 전처리된 이미지 배열을 받아 텍스트를 추출하고,
-        표 형태의 2차원 리스트(List of Lists)로 변환하여 반환합니다.
+    def extract_table_data(self, table_images: List[np.ndarray]) -> List[List[List[str]]]:
+        """
+        OpenCV로 전처리된 여러 개의 표 이미지 배열(리스트)을 받아 각각 텍스트를 추출하고,
+        표 형태의 3차원 리스트(List of List of Lists)로 변환하여 반환합니다.
         
         [아키텍처 설계 근거: List[List[str]] 변환 이유]
         Tesseract(DataFrame 반환), Naver Clova / Google Vision API(JSON 반환) 등 
@@ -42,26 +42,34 @@ class OCRExtractor:
         수정할 필요가 없도록 유지보수성과 확장성을 확보하였습니다.
         
         Args:
-            processed_image (np.ndarray): 전처리 파이프라인에서 넘어온 이미지 배열
+            table_images (List[np.ndarray]): 전처리 파이프라인에서 넘어온 표 이미지 배열들의 리스트
             
         Returns:
-            List[List[str]]: 행(Row) 단위로 텍스트가 묶인 2차원 리스트 
-                             예: [['예금종류', '계좌번호'], ['보통예금', '111-222']]
+            List[List[List[str]]]: 여러 표의 데이터가 담긴 3차원 리스트 
+                             예: [ [['표1-예금종류', '계좌번호'], ['보통예금', '111-222']], [['표2-대출', '금액']] ]
         """
-        try:
-            # 1. OCR 구동: 글자와 상세 좌표(Bounding Box) 데이터를 DataFrame으로 추출
-            data = pytesseract.image_to_data(
-                processed_image, 
-                config=self.config, 
-                output_type=Output.DATAFRAME
-            )
-        except pytesseract.TesseractNotFoundError:
-            raise EnvironmentError("Tesseract가 설치되어 있지 않거나 PATH에 없습니다.")
-
-        # 2. 추출된 데이터를 바탕으로 행(Row) 단위 그룹화 실행
-        parsed_rows = self._group_into_rows(data)
+        all_tables_data = []
         
-        return parsed_rows
+        # 전달받은 여러 개의 표 이미지를 하나씩 순회하며 OCR 수행
+        for table_image in table_images:
+            try:
+                # 1. OCR 구동: 글자와 상세 좌표(Bounding Box) 데이터를 DataFrame으로 추출
+                data = pytesseract.image_to_data(
+                    table_image, 
+                    config=self.config, 
+                    output_type=Output.DATAFRAME
+                )
+            except pytesseract.TesseractNotFoundError:
+                raise EnvironmentError("Tesseract가 설치되어 있지 않거나 PATH에 없습니다.")
+
+            # 2. 추출된 데이터를 바탕으로 행(Row) 단위 그룹화 실행
+            parsed_rows = self._group_into_rows(data)
+            
+            # 3. 빈 껍데기 표가 아니라 유효한 데이터가 추출된 경우에만 최종 결과에 추가
+            if parsed_rows:
+                all_tables_data.append(parsed_rows)
+                
+        return all_tables_data
 
     def _group_into_rows(self, df: pd.DataFrame) -> List[List[str]]:
         """
