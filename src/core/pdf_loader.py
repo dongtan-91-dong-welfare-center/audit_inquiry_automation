@@ -76,8 +76,8 @@ class PDFLoader:
         parts = name_without_ext.split('_')
 
         if len(parts) >= 3:
-            metadata["company_name"] = parts[0]
-            metadata["bank_name"] = parts[2]
+            metadata["company_name"] = parts[0].strip()
+            metadata["bank_name"] = parts[2].strip()
 
         return metadata
 
