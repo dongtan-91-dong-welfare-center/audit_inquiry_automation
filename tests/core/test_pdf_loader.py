@@ -52,6 +52,16 @@ class TestPDFLoader:
         assert loader_invalid.uploaded_file.name.endswith(".png")
 
     @pytest.mark.unit
+    def test_filename_parsing_logic(self):
+        """파일명에서 회사명과 조회처가 올바르게 분리되는지 확인합니다."""
+        mock_file = MagicMock()
+        mock_file.name = " 현대자동차 _ 01 _ 우리은행 .pdf"  # 공백이 섞인 경우 가정
+
+        loader = PDFLoader(mock_file)
+        assert loader.metadata["company_name"] == "현대자동차"
+        assert loader.metadata["bank_name"] == "우리은행"
+
+    @pytest.mark.unit
     @patch("src.core.pdf_loader.cv2.cvtColor")
     @patch("pdfplumber.open")
     def test_page_slicing_and_default_logic(self, mock_pdf_open, mock_cv2_convert):
