@@ -36,3 +36,11 @@ def scan_pdf_path():
         pytest.skip(f"테스트용 파일이 존재하지 않습니다: {path}")
 
     return str(path)
+
+# Pytest 마커 정의 (커스텀 태그 등록)
+def pytest_configure(config):
+    """
+    커스텀 마커를 등록하여 'pytest -m integration' 처럼 실행할 수 있게 합니다.
+    """
+    config.addinivalue_line("markers", "integration: 실제 PDF 파일을 사용하는 무거운 통합 테스트")
+    config.addinivalue_line("markers", "unit: Mock을 사용하는 가벼운 단위 테스트")
