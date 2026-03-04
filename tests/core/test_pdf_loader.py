@@ -52,13 +52,21 @@ class TestPDFLoader:
         assert loader_invalid.uploaded_file.name.endswith(".png")
 
     @pytest.mark.unit
+    @patch("src.core.pdf_loader.cv2.cvtColor")
     @patch("pdfplumber.open")
-    def test_page_slicing_and_default_logic(self, mock_pdf_open):
+    def test_page_slicing_and_default_logic(self, mock_pdf_open, mock_cv2_convert):
         """페이지 슬라이싱 로직과 기본값(3페이지) 적용 여부를 통합 검증합니다."""
         # 1. 가짜 PDF 설정 (총 10페이지)
         mock_pdf = MagicMock()
+        mock_page  = MagicMock()
+
+        # page.to_image().original이 호출될 때 반환할 가짜 값
+        mock_page.to_image.return_value.original = np.zeros((100, 100, 3), dtype=np.uint8)
         mock_pdf.pages = [MagicMock()] * 10
         mock_pdf_open.return_value.__enter__.return_value = mock_pdf
+
+        # cv2.cvtColor 호출 시 입력받은 것을 그대로 변환
+        mock_cv2_convert.side_effect = lambda x, y: x
 
         loader = PDFLoader(MagicMock())
 
