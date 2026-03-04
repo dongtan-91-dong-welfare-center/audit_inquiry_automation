@@ -1,6 +1,8 @@
 # src/core/pdf_loader.py
+from typing import Dict
 import pdfplumber
 import numpy as np
+import os
 import cv2
 
 class PDFLoader:
@@ -16,6 +18,7 @@ class PDFLoader:
             uploaded_file: Streamlit에서 전달받은 UploadedFile 객체
         """
         self.uploaded_file = uploaded_file
+        self.metadata = self._parse_filename()
 
         # TODO: 파일명 유효성 및 확장자(.pdf) 검증 로직 추가 (validators.py 등 외부 유틸리티 연동 고려)
 
@@ -51,6 +54,32 @@ class PDFLoader:
                 all_pages_bgr.append(img_bgr)
 
         return all_pages_bgr
+
+    def _parse_filename(self) -> Dict[str, str]:
+        """
+        파일명 규칙 "감사대상회사_{숫자}_조회처"를 분석합니다.
+        예: "삼성전자_1_국민은행.pdf" -> {company: "삼성전자", bank: "국민은행", category: "은행"}
+        """
+        # TODO: category에서 금융거래조회서의 종류를 bank를 통해 추출하는 로직 추가 검토
+        metadata = {
+            "company_name": "알수없음",
+            "bank_name": "알수없음",
+            "category": "은행",
+        }
+
+        if not self.uploaded_file:
+            return metadata
+
+        filename = self.uploaded_file.name
+        # 확장자 제거 및 파일명 분리
+        name_without_ext = os.path.splitext(filename)[0]
+        parts = name_without_ext.split('_')
+
+        if len(parts) >= 3:
+            metadata["company_name"] = parts[0]
+            metadata["bank_name"] = parts[2]
+
+        return metadata
 
     def _extract_native_text_or_tables(self):
         """
