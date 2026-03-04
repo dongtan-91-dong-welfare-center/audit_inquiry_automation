@@ -60,24 +60,36 @@ class PDFLoader:
         파일명 규칙 "감사대상회사_{숫자}_조회처"를 분석합니다.
         예: "삼성전자_1_국민은행.pdf" -> {company: "삼성전자", bank: "국민은행", category: "은행"}
         """
-        # TODO: category에서 금융거래조회서의 종류를 bank를 통해 추출하는 로직 추가 검토
+        # TODO: category에서 금융거래조회서의 종류를 bank를 통해 추출하는 로직 추가
+        # 1. 기본값 설정
         metadata = {
-            "company_name": "알수없음",
-            "bank_name": "알수없음",
-            "category": "은행",
+            "company_name": "미분류_회사",
+            "bank_name": "미분류_조회처",
+            "is_valid_format": True
         }
 
         if not self.uploaded_file:
+            metadata["is_valid_format"] = False
             return metadata
 
-        filename = self.uploaded_file.name
+        filename = getattr(self.uploaded_file, 'name', str(self.uploaded_file))
         # 확장자 제거 및 파일명 분리
-        name_without_ext = os.path.splitext(filename)[0]
-        parts = name_without_ext.split('_')
+        name_without_ext = os.path.splitext(os.path.basename(filename))[0]
+        parts = [p.strip() for p in name_without_ext.split('_')]
 
-        if len(parts) >= 3:
-            metadata["company_name"] = parts[0].strip()
-            metadata["bank_name"] = parts[2].strip()
+        # 2. 형식 검증 (언더바가 최소 2개 이상 있어서 3개 이상의 파트가 나와야 함)
+        if len(parts) < 3 or not parts[0] or not parts[2]:
+            # 형식이 맞지 않는 경우
+            metadata["is_valid_format"] = False
+            # 파일명 전체를 회사명이나 조회처명에 임시로 할당하여 에러 방지
+            metadata["company_name"] = parts[0] if parts[0] else "형식오류_회사"
+            metadata["bank_name"] = "형식오류_조회처"
+
+            print(f"⚠️ 파일명 형식이 규칙에 맞지 않습니다: {filename}")
+        else:
+            # 정상 케이스
+            metadata["company_name"] = parts[0]
+            metadata["bank_name"] = parts[2]
 
         return metadata
 
