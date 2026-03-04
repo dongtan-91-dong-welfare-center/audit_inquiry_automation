@@ -62,6 +62,25 @@ class TestPDFLoader:
         assert loader.metadata["bank_name"] == "우리은행"
 
     @pytest.mark.unit
+    def test_filename_parsing_invalid_format(self):
+        """규칙에 맞지 않는 파일명이 들어왔을 때 방어 로직이 작동하는지 확인합니다."""
+        # Case A: 언더바가 없는 경우
+        mock_file_invalid = MagicMock()
+        mock_file_invalid.name = "삼성전자국민은행.pdf"
+
+        loader = PDFLoader(mock_file_invalid)
+        assert loader.metadata["is_valid_format"] is False
+        assert loader.metadata["company_name"] == "삼성전자국민은행"
+
+        # Case B: 파트가 부족한 경우 (회사_숫자.pdf)
+        mock_file_short = MagicMock()
+        mock_file_short.name = "삼성전자_1.pdf"
+
+        loader_short = PDFLoader(mock_file_short)
+        assert loader_short.metadata["is_valid_format"] is False
+        assert loader_short.metadata["bank_name"] == "형식오류_조회처"
+
+    @pytest.mark.unit
     @patch("src.core.pdf_loader.cv2.cvtColor")
     @patch("pdfplumber.open")
     def test_page_slicing_and_default_logic(self, mock_pdf_open, mock_cv2_convert):
