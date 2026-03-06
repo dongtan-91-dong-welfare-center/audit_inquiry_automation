@@ -13,12 +13,7 @@ class ImagePreprocessor:
         all_table_images = []
         for page_img in page_images:
             tables = self.process_page(page_img)
-            # OCR 엔진(PaddleOCR) 호환을 위해 최종 출력 이미지를 3채널(BGR)로 통일
-            bgr_tables = [
-                cv2.cvtColor(tbl, cv2.COLOR_GRAY2BGR) if tbl.ndim == 2 else tbl 
-                for tbl in tables
-            ]
-            all_table_images.extend(bgr_tables)
+            all_table_images.extend(tables)
         return all_table_images
 
     def process_page(self, page_image: np.ndarray) -> list[np.ndarray]:
@@ -71,6 +66,8 @@ class ImagePreprocessor:
             if cv2.contourArea(cnt) > min_table_area:
                 x, y, w, h = cv2.boundingRect(cnt)
                 table_crop = upscaled[y:y + h, x:x + w]
+                # OCR 엔진(PaddleOCR) 호환을 위해 이미지를 3채널(BGR)로 통일
+                table_crop = cv2.cvtColor(table_crop, cv2.COLOR_GRAY2BGR) if table_crop.ndim == 2 else table_crop
                 table_images.append({'img': table_crop, 'y': y, 'x': x})
 
         if not table_images:
