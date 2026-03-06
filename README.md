@@ -85,16 +85,6 @@ cp .env.example .env  # 필요에 따라 수정
 python app.py
 ```
 
-### Docker 실행
-
-```bash
-# GPU 포함 빌드 & 실행
-docker compose up -d --build
-
-# 로그 확인
-docker compose logs -f paddle-doc-pipeline
-```
-
 ## API 사용법
 
 ### 단일 파일 파싱
@@ -133,18 +123,7 @@ async with httpx.AsyncClient(timeout=300) as client:
     print(result["full_markdown"])
 ```
 
-### 기존 aidoc_workflow 연동
 
-```python
-# LangGraph 노드에서 PaddleOCR 서비스 호출
-from client_example import aidoc_paddle_integration
-
-async def parse_node(state):
-    parsed = await aidoc_paddle_integration(state["file_path"])
-    state["parsed_markdown"] = parsed["full_markdown"]
-    state["parsed_chunks"] = parsed["chunks"]
-    return state
-```
 
 ## 환경변수
 
