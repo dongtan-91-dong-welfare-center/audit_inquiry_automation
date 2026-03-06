@@ -2,15 +2,32 @@
 
 from __future__ import annotations
 
+import os
+import sys
 from enum import Enum
 from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
-# config.py 상단에 추가
-import os
+
+# ── Colab / 권한 문제 사전 처리 ──────────────────────────
+# paddlex가 import되기 전에 환경변수를 설정해야 함
+
+# 모델 소스 체크 비활성화
 os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
-os.environ.setdefault("PADDLEX_MODEL_DIR", "/home/ubuntu/workspace/x-meeting/test/models")
+
+# Colab 환경 감지
+IS_COLAB = "google.colab" in sys.modules or os.path.exists("/content")
+
+# 모델 캐시 디렉토리: 쓰기 권한이 있는 곳으로 설정
+_default_model_dir = "/content/paddle_models" if IS_COLAB else str(Path.home() / ".paddlex" / "official_models")
+
+# paddlex 내부에서 사용하는 모델 디렉토리 환경변수
+# paddlex는 PADDLE_PDX_MODEL_DIR 또는 내부 기본값 사용
+_model_dir = os.environ.get("PADDLE_PDX_MODEL_DIR", _default_model_dir)
+os.environ["PADDLE_PDX_MODEL_DIR"] = _model_dir
+Path(_model_dir).mkdir(parents=True, exist_ok=True)
+
 
 class ParseMode(str, Enum):
     """문서 파싱 모드."""
