@@ -1,16 +1,20 @@
 [project]
-name = "standard-goverance-template"
+name = "paddle-doc-pipeline"
 version = "0.1.0"
-description = ""
-authors = [
-    {name = "qldrh112",email = "didie8520@gmail.com"}
-]
-readme = "README.md"
-requires-python = ">=3.11"
+description = "RAG Document Parsing Pipeline with PP-StructureV3 + PP-OCRv5"
+requires-python = ">=3.10"
+
 dependencies = [
+    "paddleocr>=3.1.0",
+    "paddlepaddle-gpu>=3.1.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "python-multipart>=0.0.9",
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.5.0",
+    "aiofiles>=24.1.0",
+    "PyMuPDF>=1.24.0",
 ]
 
-
-[build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+[project.optional-dependencies]
+dev = ["ruff", "pytest", "httpx"]

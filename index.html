@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Parsing Pipeline Viewer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .spinner {
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        /* Smooth scrolling and transitions */
+        .smooth-transition { transition: all 0.3s ease; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen text-gray-800 pb-12">
+    <div class="max-w-7xl mx-auto p-6">
+        <!-- Header -->
+        <header class="mb-10 text-center pt-8">
+            <h1 class="text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl">
+                Parser <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">Studio</span>
+            </h1>
+            <p class="text-gray-500 mt-3 text-lg font-medium">Visualizing Document Layout & Text Extraction</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <!-- Left Pane: Upload & Settings -->
+            <div class="lg:col-span-4 space-y-6">
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                    <h2 class="text-lg font-semibold mb-4 text-gray-800 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                        Upload Source
+                    </h2>
+                    <form id="uploadForm" class="space-y-6">
+                        <!-- File Input -->
+                        <div class="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:bg-indigo-50 hover:border-indigo-300 transition-colors cursor-pointer flex flex-col items-center justify-center min-h-[160px]" id="dropZone">
+                            <input type="file" id="fileInput" class="hidden" accept=".pdf,.png,.jpg,.jpeg,.bmp,.webp" required>
+                            <svg class="h-10 w-10 text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <p class="text-sm font-medium text-gray-700">Click to upload or drag & drop</p>
+                            <p class="text-xs text-gray-400 mt-1">PDF, PNG, JPG (Max: 10MB)</p>
+                            <div id="fileNameDisplay" class="mt-3 hidden bg-indigo-100 text-indigo-700 text-xs font-semibold px-3 py-1 rounded-full text-center truncate max-w-full"></div>
+                        </div>
+
+                        <!-- Parse Mode -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Extraction Mode</label>
+                            <select id="parseMode" class="w-full bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 shadow-sm">
+                                <option value="structure">Layout & Elements (PP-StructureV3)</option>
+                                <option value="ocr_only">Plain Text Only (PP-OCRv5)</option>
+                            </select>
+                        </div>
+
+                        <!-- Checkboxes -->
+                        <div class="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-3">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Optional Features</p>
+                            <label class="flex items-center space-x-3 cursor-pointer">
+                                <input type="checkbox" id="useTable" checked class="w-4 h-4 text-indigo-600 bg-white border-gray-300 rounded focus:ring-indigo-500">
+                                <span class="text-sm font-medium text-gray-700 hover:text-gray-900">Parse Tables</span>
+                            </label>
+                            <label class="flex items-center space-x-3 cursor-pointer">
+                                <input type="checkbox" id="useFormula" checked class="w-4 h-4 text-indigo-600 bg-white border-gray-300 rounded focus:ring-indigo-500">
+                                <span class="text-sm font-medium text-gray-700 hover:text-gray-900">Parse Mathematical Formulas</span>
+                            </label>
+                            <label class="flex items-center space-x-3 cursor-pointer">
+                                <input type="checkbox" id="useChart" checked class="w-4 h-4 text-indigo-600 bg-white border-gray-300 rounded focus:ring-indigo-500">
+                                <span class="text-sm font-medium text-gray-700 hover:text-gray-900">Parse Charts</span>
+                            </label>
+                        </div>
+
+                        <button type="submit" id="submitBtn" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-xl text-sm px-5 py-3.5 flex items-center justify-center space-x-2 shadow-md transition-all transform hover:-translate-y-0.5">
+                            <svg id="btnIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            <span id="btnText">Execute Pipeline</span>
+                            <div id="btnSpinner" class="spinner hidden"></div>
+                        </button>
+                    </form>
+                </div>
+                
+                <!-- Legend -->
+                <div id="legendPanel" class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 hidden">
+                    <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Bounding Box Colors</h3>
+                    <div class="grid grid-cols-2 gap-2 text-xs font-medium" id="colorLegend">
+                        <!-- JS injects legend items -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Pane: Results -->
+            <div class="lg:col-span-8 flex flex-col space-y-6">
+                <!-- Visual Preview Area (for images) -->
+                <div id="previewArea" class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 hidden">
+                    <h2 class="text-lg font-semibold mb-4 text-gray-800 flex items-center justify-between">
+                        <span class="flex items-center">
+                            <svg class="w-5 h-5 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                            Visual BBox Preview
+                        </span>
+                        <span class="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full border border-indigo-100">Mapped from image</span>
+                    </h2>
+                    <div id="canvasContainer" class="relative overflow-auto border-2 border-dashed border-gray-200 rounded-xl bg-gray-50 flex justify-center items-center p-2" style="max-height: 550px;">
+                        <canvas id="imageCanvas" class="max-w-full h-auto rounded shadow bg-white"></canvas>
+                    </div>
+                </div>
+
+                <!-- Structured Results Area -->
+                <div id="resultsArea" class="bg-white rounded-2xl shadow-sm border border-gray-200 flex flex-col overflow-hidden" style="min-height: 600px;">
+                    <!-- Results Header / Tabs -->
+                    <div class="px-6 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center bg-white">
+                        <h2 class="text-lg font-semibold text-gray-800 flex items-center">
+                            <svg class="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
+                            Parsed Output
+                        </h2>
+                        <div class="flex p-1 bg-gray-100 rounded-lg" id="tabs">
+                            <button id="tabElements" class="px-4 py-1.5 text-sm font-semibold rounded-md bg-white text-indigo-600 shadow-sm focus:outline-none transition-all">Details</button>
+                            <button id="tabMarkdown" class="px-4 py-1.5 text-sm font-semibold rounded-md text-gray-500 hover:text-gray-900 focus:outline-none transition-all">Markdown</button>
+                        </div>
+                    </div>
+
+                    <div id="emptyState" class="flex-grow flex flex-col items-center justify-center p-12 text-gray-400">
+                        <svg class="h-16 w-16 mb-4 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                        </svg>
+                        <p class="text-lg font-medium text-gray-500">Awaiting your file</p>
+                        <p class="text-sm">Upload a document to extract text and layout bounds automatically.</p>
+                    </div>
+
+                    <div id="elementsContent" class="hidden flex-grow p-6 space-y-5 overflow-y-auto bg-gray-50/50">
+                        <!-- Cards injected here via JS -->
+                    </div>
+
+                    <div id="markdownContent" class="hidden flex-grow flex flex-col">
+                        <textarea id="markdownViewer" class="flex-grow w-full p-6 bg-white border-0 text-sm text-gray-800 font-mono focus:ring-0 resize-none" readonly></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const dropZone = document.getElementById('dropZone');
+        const fileNameDisplay = document.getElementById('fileNameDisplay');
+        const form = document.getElementById('uploadForm');
+        
+        const submitBtn = document.getElementById('submitBtn');
+        const btnText = document.getElementById('btnText');
+        const btnIcon = document.getElementById('btnIcon');
+        const btnSpinner = document.getElementById('btnSpinner');
+
+        const emptyState = document.getElementById('emptyState');
+        const elementsContent = document.getElementById('elementsContent');
+        const markdownContent = document.getElementById('markdownContent');
+        const markdownViewer = document.getElementById('markdownViewer');
+        
+        const tabElements = document.getElementById('tabElements');
+        const tabMarkdown = document.getElementById('tabMarkdown');
+
+        const previewArea = document.getElementById('previewArea');
+        const imageCanvas = document.getElementById('imageCanvas');
+        const ctx = imageCanvas.getContext('2d');
+        const legendPanel = document.getElementById('legendPanel');
+        const colorLegend = document.getElementById('colorLegend');
+        
+        let currentImageObj = null; // Store loaded image
+
+        // Custom Colors for Element Types (Tailwind palette equivalent)
+        const colors = {
+            'text': { hex: '#3b82f6', bg: 'bg-blue-500', name: 'Text' },       // blue-500
+            'title': { hex: '#8b5cf6', bg: 'bg-purple-500', name: 'Title' },      // purple-500
+            'figure': { hex: '#10b981', bg: 'bg-emerald-500', name: 'Figure' },    // emerald-500
+            'table': { hex: '#f59e0b', bg: 'bg-amber-500', name: 'Table' },       // amber-500
+            'formula': { hex: '#ec4899', bg: 'bg-pink-500', name: 'Formula' },     // pink-500
+            'header': { hex: '#6366f1', bg: 'bg-indigo-500', name: 'Header' },     // indigo-500
+            'footer': { hex: '#64748b', bg: 'bg-slate-500', name: 'Footer' },      // slate-500
+            'unknown': { hex: '#9ca3af', bg: 'bg-gray-400', name: 'Unknown' }      // gray-400
+        };
+
+        // Populate Legend
+        const usedTypes = new Set();
+        function renderLegend() {
+            colorLegend.innerHTML = '';
+            usedTypes.forEach(type => {
+                const conf = colors[type] || colors['unknown'];
+                colorLegend.innerHTML += `
+                    <div class="flex items-center space-x-2">
+                        <span class="w-3 h-3 rounded-full ${conf.bg}"></span>
+                        <span class="capitalize text-gray-700">${conf.name}</span>
+                    </div>
+                `;
+            });
+            if (usedTypes.size > 0 && currentImageObj) {
+                legendPanel.classList.remove('hidden');
+            }
+        }
+
+        // File Selection Logic
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                const file = e.target.files[0];
+                fileNameDisplay.textContent = file.name;
+                fileNameDisplay.classList.remove('hidden');
+                dropZone.classList.add('border-indigo-400', 'bg-indigo-50/50');
+                
+                // If it's an image, load it into an Image object to draw later
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            currentImageObj = img;
+                        };
+                        img.src = ev.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                } else {
+                    currentImageObj = null; // Wait for server to process PDF, frontend won't render preview
+                }
+            } else {
+                fileNameDisplay.classList.add('hidden');
+                dropZone.classList.remove('border-indigo-400', 'bg-indigo-50/50');
+                currentImageObj = null;
+            }
+        });
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => { 
+            e.preventDefault(); 
+            dropZone.classList.add('border-indigo-400', 'bg-indigo-50'); 
+        });
+        dropZone.addEventListener('dragleave', () => { 
+            dropZone.classList.remove('border-indigo-400', 'bg-indigo-50'); 
+            if(fileInput.files.length > 0) dropZone.classList.add('bg-indigo-50/50');
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-indigo-400', 'bg-indigo-50');
+            if (e.dataTransfer.files.length > 0) {
+                fileInput.files = e.dataTransfer.files;
+                fileInput.dispatchEvent(new Event('change'));
+            }
+        });
+
+        // Tabs Logic
+        tabElements.addEventListener('click', () => {
+            tabElements.className = "px-4 py-1.5 text-sm font-semibold rounded-md bg-white text-indigo-600 shadow-sm focus:outline-none transition-all";
+            tabMarkdown.className = "px-4 py-1.5 text-sm font-semibold rounded-md text-gray-500 hover:text-gray-900 focus:outline-none transition-all";
+            elementsContent.classList.remove('hidden');
+            markdownContent.classList.add('hidden');
+        });
+
+        tabMarkdown.addEventListener('click', () => {
+            tabMarkdown.className = "px-4 py-1.5 text-sm font-semibold rounded-md bg-white text-indigo-600 shadow-sm focus:outline-none transition-all";
+            tabElements.className = "px-4 py-1.5 text-sm font-semibold rounded-md text-gray-500 hover:text-gray-900 focus:outline-none transition-all";
+            markdownContent.classList.remove('hidden');
+            elementsContent.classList.add('hidden');
+        });
+
+        // Form Submit
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!fileInput.files.length) return alert('Please select a file to parse.');
+
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('mode', document.getElementById('parseMode').value);
+            formData.append('use_table', document.getElementById('useTable').checked);
+            formData.append('use_formula', document.getElementById('useFormula').checked);
+            formData.append('use_chart', document.getElementById('useChart').checked);
+
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-90', 'cursor-not-allowed');
+            btnText.textContent = "Processing Document...";
+            btnIcon.classList.add('hidden');
+            btnSpinner.classList.remove('hidden');
+            
+            elementsContent.innerHTML = '';
+            markdownViewer.value = '';
+            emptyState.classList.add('hidden');
+            previewArea.classList.add('hidden');
+            legendPanel.classList.add('hidden');
+            usedTypes.clear();
+            
+            try {
+                const res = await fetch('/parse', {
+                    method: 'POST',
+                    body: formData
+                });
+                if (!res.ok) {
+                    const errorData = await res.json();
+                    throw new Error(errorData.detail || 'Server processing error');
+                }
+                const data = await res.json();
+                renderResults(data);
+                tabElements.click();
+
+            } catch (err) {
+                alert('Request Failed: ' + err.message);
+                emptyState.classList.remove('hidden');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('opacity-90', 'cursor-not-allowed');
+                btnText.textContent = "Execute Pipeline";
+                btnIcon.classList.remove('hidden');
+                btnSpinner.classList.add('hidden');
+            }
+        });
+
+        function renderResults(data) {
+            elementsContent.classList.remove('hidden');
+            
+            // Render Markdown
+            markdownViewer.value = data.full_markdown || 'No markdown output generated.';
+
+            // Collect elements
+            let allItems = [];
+            data.pages.forEach(page => {
+                const items = data.mode === 'structure' ? page.elements : page.ocr_blocks;
+                items.forEach(item => {
+                    item._page = page.page_index + 1;
+                    const typeStr = (item.element_type || 'text').toLowerCase();
+                    usedTypes.add(typeStr);
+                    allItems.push(item);
+                });
+            });
+
+            // Handle Preview Canvas (only if image)
+            if (currentImageObj) {
+                previewArea.classList.remove('hidden');
+                
+                // Setup actual canvas size matching image width
+                imageCanvas.width = currentImageObj.width;
+                imageCanvas.height = currentImageObj.height;
+                
+                // Draw base image
+                ctx.drawImage(currentImageObj, 0, 0);
+
+                // Draw bounding boxes natively
+                ctx.lineWidth = Math.max(2, currentImageObj.width / 500); 
+                allItems.forEach((itm, idx) => {
+                    if (itm.bbox) {
+                        const typeStr = (itm.element_type || 'text').toLowerCase();
+                        const colorCode = (colors[typeStr] || colors['unknown']).hex;
+                        
+                        ctx.strokeStyle = colorCode;
+                        ctx.fillStyle = colorCode + '25'; // Add 25 alpha (hex) for slight transparency
+                        
+                        const w = itm.bbox.x2 - itm.bbox.x1;
+                        const h = itm.bbox.y2 - itm.bbox.y1;
+                        
+                        // Rectangle
+                        ctx.beginPath();
+                        ctx.rect(itm.bbox.x1, itm.bbox.y1, w, h);
+                        ctx.fill();
+                        ctx.stroke();
+
+                        // Visual Badge (Index Number)
+                        const fontSize = Math.max(12, currentImageObj.width / 60);
+                        ctx.font = `bold ${fontSize}px Inter, sans-serif`;
+                        
+                        const text = String(idx + 1);
+                        const metrics = ctx.measureText(text);
+                        const boxW = metrics.width + (fontSize);
+                        const boxH = fontSize * 1.5;
+                        
+                        // Draw badge background
+                        ctx.fillStyle = colorCode;
+                        const bx = itm.bbox.x1;
+                        const by = Math.max(0, itm.bbox.y1 - boxH);
+                        ctx.fillRect(bx, by, boxW, boxH);
+                        
+                        // Draw badge text
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillText(text, bx + (fontSize / 2), by + fontSize);
+                    }
+                });
+                renderLegend();
+            }
+
+            // Empty State Handling
+            if (allItems.length === 0) {
+                elementsContent.innerHTML = `
+                <div class="flex items-center justify-center p-8 border-2 border-dashed border-gray-200 rounded-xl bg-white text-gray-500">
+                    No distinct layout elements or text found in the document.
+                </div>`;
+                return;
+            }
+
+            // Render Cards
+            allItems.forEach((itm, idx) => {
+                const typeStr = itm.element_type ? itm.element_type : 'Text (OCR)';
+                const lClass = itm.element_type ? itm.element_type.toLowerCase() : 'text';
+                const cConf = colors[lClass] || colors['unknown'];
+                
+                const contentStr = itm.content || itm.text || '';
+                
+                let bboxHtml = '<span class="text-gray-400 italic">No Coordinates</span>';
+                if (itm.bbox) {
+                    bboxHtml = `<span class="text-gray-700 font-semibold">[${itm.bbox.x1.toFixed(1)}, ${itm.bbox.y1.toFixed(1)}, ${itm.bbox.x2.toFixed(1)}, ${itm.bbox.y2.toFixed(1)}]</span>`;
+                }
+
+                // Metadata handling (like table html, etc.)
+                let metaHtml = '';
+                if (itm.metadata && Object.keys(itm.metadata).length > 0) {
+                    metaHtml = `<div class="mt-3 pt-3 border-t border-gray-100 flex items-center space-x-2 text-xs text-gray-400">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <span>Contains additional attributes/HTML (view raw JSON for details)</span>
+                    </div>`;
+                }
+
+                const cardHtml = `
+                    <div class="bg-white border border-gray-100 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden relative">
+                        <!-- Left color bar indicator -->
+                        <div class="absolute left-0 top-0 bottom-0 w-1 ${cConf.bg}"></div>
+                        
+                        <div class="p-5 pl-6">
+                            <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                                <div class="flex items-center space-x-3">
+                                    <div class="flex items-center justify-center w-7 h-7 rounded-full bg-gray-100 text-sm font-bold text-gray-700 border border-gray-200 shadow-sm">${idx + 1}</div>
+                                    <span class="px-2.5 py-1 text-xs font-bold rounded text-white shadow-sm tracking-wide ${cConf.bg}">
+                                        ${typeStr.toUpperCase()}
+                                    </span>
+                                    <span class="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-md">Page ${itm._page}</span>
+                                </div>
+                                <div class="text-xs font-mono text-gray-500 bg-gray-50/80 px-2.5 py-1.5 rounded-lg border border-gray-100 flex items-center shadow-inner">
+                                    <svg class="w-3.5 h-3.5 mr-1.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                                    ${bboxHtml}
+                                </div>
+                            </div>
+                            
+                            <div class="text-[15px] text-gray-800 font-medium whitespace-pre-wrap leading-relaxed mt-2 bg-gray-50/50 p-3 rounded border border-gray-100/50">${escapeHtml(contentStr)}</div>
+                            ${metaHtml}
+                        </div>
+                    </div>
+                `;
+                elementsContent.insertAdjacentHTML('beforeend', cardHtml);
+            });
+        }
+
+        // Safety HTML escape
+        function escapeHtml(unsafe) {
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
