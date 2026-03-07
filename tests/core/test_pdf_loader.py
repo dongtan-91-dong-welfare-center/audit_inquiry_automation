@@ -1,6 +1,5 @@
 import pytest
 import numpy as np
-import pdfplumber
 from unittest.mock import MagicMock, patch
 from src.core.pdf_loader import PDFLoader
 

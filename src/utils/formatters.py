@@ -6,9 +6,9 @@ from typing import List
 class FinancialTableFormatter:
     """
     [금융상품(예·적금) 테이블 전용 포매터]
-    은행 조회서의 '금융상품' 테이블에서 Tesseract OCR이 흔히 발생시키는 
+    은행 조회서의 '금융상품' 테이블에서 Tesseract OCR이 흔히 발생시키는
     특유의 오류(셀 쪼개짐, 기호 오인식 등)를 전용으로 교정하는 클래스입니다.
-    
+
     * 상태를 저장할 필요가 없이 단순히 추출된 데이터를 가공하는 툴이기 때문에 모든 메서드는 @staticmethod 로 구성합니다.
     """
 
@@ -16,7 +16,7 @@ class FinancialTableFormatter:
     def process(extracted_rows: List[List[str]]) -> List[List[str]]:
         """
         추출된 전체 행(Row) 데이터를 순회하며 금융상품 전용 정제 규칙을 적용합니다.
-        
+
         Args:
             extracted_rows: OCR 엔진이 추출한 날것의 2차원 리스트
         Returns:
@@ -26,17 +26,17 @@ class FinancialTableFormatter:
         for row in extracted_rows:
             # 1. ocr_engine에서 넘어온 가장 날것의 데이터에서 공통 노이즈 먼저 제거
             cleaned_row = FinancialTableFormatter._remove_noise(row)
-            
+
             # 2. 구조적 오류 수정: 쪼개진 상품명 및 계좌번호 병합
             merged_row = FinancialTableFormatter._merge_split_cells(cleaned_row)
-            
+
             # 3. 내용적 오류 수정: 금액 콤마, 오타 등 텍스트 교정
             formatted_row = FinancialTableFormatter._format_cells(merged_row)
-            
+
             # 노이즈가 제거되어 텅 비어버린 리스트(행)는 최종 결과에서 제외
             if formatted_row:
                 processed_data.append(formatted_row)
-            
+
         return processed_data
 
     @staticmethod
@@ -62,7 +62,7 @@ class FinancialTableFormatter:
 
         new_row = []
         i = 0
-        
+
         # =====================================================================
         # [규칙 1] 계좌번호가 '-' 기준으로 쪼개진 경우 병합
         # 현상: ['346-7832-', '1294-63'] 처럼 계좌번호가 두 칸으로 나뉨
@@ -70,18 +70,18 @@ class FinancialTableFormatter:
         # =====================================================================
         while i < len(row):
             cell = row[i]
-            
+
             # 앞 셀이 '-'로 끝나는지 확인하고, 뒤에 합칠 셀이 더 남아있는지 체크
             if cell.endswith('-') and i + 1 < len(row):
                 next_cell = row[i+1]
-                
+
                 # 정규표현식 r'^'은 문자열의 시작을 의미하며, \|는 숫자 1을 테두리로 인식하는 경우를 방지함.
                 if re.match(r'^[\d\|]+', next_cell):
                     merged_acc = cell + next_cell  # 두 셀을 하나로 합침
                     new_row.append(merged_acc)
                     i += 2  # 두 칸을 하나로 썼으므로 인덱스를 2칸 건너뜀
                     continue
-                
+
             new_row.append(cell)
             i += 1
 
@@ -90,7 +90,7 @@ class FinancialTableFormatter:
         # 현상: ['예', '-', '적', '금', '119-3259-0832-25', ...] 처럼 금융상품의 종류가 여러 칸으로 나뉨
         # 해결: 완벽한 형태의 '계좌번호'를 찾은 뒤, 그 앞의 모든 칸을 상품명으로 취급하여 합침
         # =====================================================================
-        
+
         # 2-1. 계좌번호 패턴(숫자-숫자-숫자)이 나오는 기준점(Anchor) 위치 찾기
         acc_idx = -1
         for idx, item in enumerate(new_row):
@@ -103,12 +103,12 @@ class FinancialTableFormatter:
         if acc_idx > 0:
             # 계좌번호 앞부분의 모든 파편을 하나로 이어붙임 (예: '예-적금|')
             product_type = "".join(new_row[:acc_idx])
-            
+
             # 정규표현식 r'[-_\s|]' 해설:
             # - 하이픈(-), 언더바(_), 공백(\s), 파이프(|) 중 하나라도 있으면 지움('')
             # - 결과: '예-적금|' -> '예적금'
             product_type = re.sub(r'[-_\s|]', '', product_type)
-            
+
             # [합쳐진 깨끗한 금융상품의 종류] + [계좌번호부터 끝까지의 원래 데이터] 로 리스트 재조립
             new_row = [product_type] + new_row[acc_idx:]
 
@@ -120,7 +120,7 @@ class FinancialTableFormatter:
         (내부 헬퍼) 구조가 잡힌 개별 셀 안에서 글자 오탈자 및 기호를 교정합니다.
         """
         formatted = []
-        
+
         for item in row:
             # =====================================================================
             # [규칙 3] 상품명 표준화
@@ -128,7 +128,7 @@ class FinancialTableFormatter:
             # 해결: 정답 데이터 양식에 맞춰 '예·적금'으로 통일
             # =====================================================================
             if item in ['예적금', '예적', '예금', '적금']:
-                # 원래 단순 '예금', '적금'이었던 데이터는 훼손하지 않고, 
+                # 원래 단순 '예금', '적금'이었던 데이터는 훼손하지 않고,
                 # 파편이 합쳐져서 '예'와 '적'이 둘 다 포함된 경우에만 변환 수행
                 if '예' in item and '적' in item:
                     item = '예·적금'
@@ -138,12 +138,12 @@ class FinancialTableFormatter:
             # 현상: 12,309 를 12.309 로 잘못 읽음
             # 해결: 완벽한 금액 패턴인 경우에만 마침표를 쉼표로 변환
             # =====================================================================
-            
+
             # 정규표현식 r'^\d{1,3}(\.\d{3})+$' 해설:
             # - 1~3자리의 숫자로 시작하고 (^\d{1,3})
             # - 뒤에 '.숫자3개' 패턴이 1번 이상 반복되는가? ((\.\d{3})+$)
             # - 날짜 25.03.31(25.0331) 이나 이자율 2.5%(2.59)가 망가지는 경우도 존재하기 때문에 이를 방지하기 위한 엄격한 조건
-            
+
             ### [주의/TODO] OCR 성능에 따른 이자율 오인식 이슈:
             ### 이자율의 % 기호를 숫자로 오인식 하는 경우 (예: 2.5% -> 2.569)가 발생할 수 있으므로,
             ### 추후 OCR 성능 테스트를 거치며 금액/이자율 식별 로직 보완이 필요할 수 있음.
@@ -151,7 +151,7 @@ class FinancialTableFormatter:
                 item = item.replace('.', ',')
 
             formatted.append(item)
-            
+
         return formatted
 
 

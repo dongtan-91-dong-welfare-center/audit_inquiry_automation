@@ -1,4 +1,4 @@
-# tests/core/test_postprocessor.py
+# tests/unit/test_postprocessor.py
 
 import os
 import cv2
@@ -22,19 +22,19 @@ def test_postprocessor_integration():
     preprocessor = ImagePreprocessor()
     extractor = OCRExtractor(psm=6)
     processed_tables = preprocessor.process_page(raw_image)
-    
+
     # 3. [테스트 핵심] 후처리 인스턴스 생성
     postprocessor = PostProcessor()
-    
+
     print(f"\n▶ 데이터 후처리(정제) 결과 확인: {os.path.basename(img_path)}")
-    
+
     for table_idx, table_img in enumerate(processed_tables):
         # 날것의 데이터 획득
         raw_rows = extractor.extract_table_data(table_img)
-        
+
         # 정제 함수 적용
         cleaned_rows = postprocessor.process_data(raw_rows)
-        
+
         # 후처리 결과 출력
         print(f"\n================== [ 표 {table_idx + 1} 정제 완료 데이터 (Cleaned) ] ==================")
         if not cleaned_rows:
@@ -42,5 +42,5 @@ def test_postprocessor_integration():
         else:
             for i, row in enumerate(cleaned_rows):
                 print(f"Row {i:02d} | 칸 수: {len(row)} | 데이터: {row}")
-                
+
     print("\n=======================================================================\n")

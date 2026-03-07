@@ -1,4 +1,4 @@
-# tests/core/test_preprocessor.py
+# tests/unit/test_preprocessor.py
 import pytest
 import cv2
 import numpy as np
@@ -26,10 +26,10 @@ class TestImagePreprocessor:
         assert image is not None, f"이미지를 불러올 수 없습니다: {image_path}"
 
         table_images = self.preprocessor.process_page(image)
-        
+
         # 표가 검출되었는지 확인 (리스트가 비어있지 않아야 함)
         assert len(table_images) > 0
-        
+
         # 검출된 결과물 저장 (디버깅 용도)
         file_name = os.path.basename(image_path)
         for i, table_img in enumerate(table_images):
@@ -45,7 +45,7 @@ class TestImagePreprocessor:
             pytest.skip("테스트할 이미지 파일이 부족합니다.")
 
         all_tables = self.preprocessor.process_pages(sample_images)
-        
+
         # 여러 페이지에서 추출된 표들이 하나의 리스트로 통합되었는지 확인
         assert isinstance(all_tables, list)
         assert len(all_tables) >= len(sample_images)
@@ -58,13 +58,13 @@ class TestImagePreprocessor:
         """
         image = cv2.imread(image_path)
         table_images = self.preprocessor.process_page(image)
-        
+
         for table_img in table_images:
             # 1. 업스케일링 확인 (fx=2 적용 시 원본 영역보다 커야 함)
             # 원본 대비 가로/세로 비율이 적절한지 확인
             assert table_img.shape[0] > 0
             assert table_img.shape[1] > 0
-            
+
             # 2. 이미지 이진화 상태 확인 (이미지가 너무 어둡거나 밝지 않은지)
             mean_brightness = np.mean(table_img)
             assert 10 < mean_brightness < 245, "이미지가 너무 검거나 흰색입니다. 이진화 설정을 확인하세요."
@@ -76,7 +76,7 @@ class TestImagePreprocessor:
         path = IMAGE_FILES[0]
         image = cv2.imread(path)
         table_images = self.preprocessor.process_page(image)
-        
+
         for table_img in table_images:
             h, w = table_img.shape[:2]
             # 너무 작은 영역(예: 50x50 미만)은 표가 아닐 가능성이 높음

@@ -1,4 +1,4 @@
-# tests/core/test_ocr_engine.py
+# tests/unit/test_ocr_engine.py
 
 import os
 import pytest
