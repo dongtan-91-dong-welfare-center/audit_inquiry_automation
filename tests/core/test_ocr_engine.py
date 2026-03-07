@@ -8,6 +8,7 @@ from src.core.pdf_loader import PDFLoader
 from src.core.preprocessor import ImagePreprocessor
 from src.core.ocr_engine import OCRExtractor
 
+@pytest.mark.integration
 def test_ocr_pipeline_integration():
     """
     [통합 테스트 파이프라인]
@@ -40,7 +41,7 @@ def test_ocr_pipeline_integration():
 
     # 3. OCR (OCRExtractor) 모듈 실행
     print("\n▶ 3. OCR 엔진 구동 및 표 데이터 일괄 추출 중...")
-    extractor = OCRExtractor(psm=6)
+    extractor = OCRExtractor()
     
     all_tables_data = extractor.extract_table_data(table_images)
     
