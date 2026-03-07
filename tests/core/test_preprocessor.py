@@ -77,8 +77,10 @@ class TestImagePreprocessor:
 
         # y좌표가 작은 것(표 1, 상단)이 먼저 오고, 3채널(BGR)로 변환되었는지 검증
         table_1, table_2 = tables
-        assert table_1.shape == (600, 800, 3), "첫 번째 표의 크기나 채널이 맞지 않습니다."
-        assert table_2.shape == (600, 800, 3), "두 번째 표의 크기나 채널이 맞지 않습니다."
+
+        # 팽창 연산으로 인해 사방으로 확장된 픽셀(14px)을 반영한 크기로 검증
+        assert table_1.shape == (614, 814, 3), "첫 번째 표의 크기나 채널이 맞지 않습니다."
+        assert table_2.shape == (614, 814, 3), "두 번째 표의 크기나 채널이 맞지 않습니다."
 
     @pytest.mark.unit
     def test_remove_vertical_lines(self):
