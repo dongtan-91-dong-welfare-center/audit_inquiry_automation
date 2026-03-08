@@ -33,7 +33,7 @@ Tesseract를 어디서든 사용할 수 있도록 PATH 환경 변수에 추가�
 4. 새로 만들기를 클릭하고 Tesseract 설치 경로(C:\Program Files\Tesseract-OCR) 추가
 5. 확인을 클릭하여 모든 창 닫기
 
-#### ㅊ4. 설치 확인
+#### 4. 설치 확인
 새 PowerShell 또는 명령 프롬프트를 열고 다음 명령어를 실행합니다:
 
 ``` powershell
