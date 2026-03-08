@@ -1,28 +1,39 @@
 # src/core/postprocessor.py
 
-import pandas as pd
-# TODO: src.utils.formatters에서 데이터 정제 함수들 임포트
+from typing import List
+from src.utils.formatters import FinancialTableFormatter
 
-class DataPostprocessor:
+class PostProcessor:
     """
-    [데이터 정제 담당자]
-    OCR로 추출된 원시 데이터를 DataFrame으로 만들고, 여러 데이터를 하나로 병합합니다.
+    [데이터 정제 총괄 매니저]
+    OCR로 추출된 2차원 리스트 데이터를 받아,
+    테이블의 성격(예: 금융상품, 차입금 등)에 맞는 알맞은 포매터(Formatter)를 연결해 줍니다.
     """
-    def to_dataframe(self, raw_table_data):
-        """
-        개별 표 데이터를 pandas DataFrame으로 변환하고 1차 정제를 수행합니다.
-        """
-        # TODO: 추출된 데이터를 DataFrame 구조로 매핑
-        # TODO: 완전히 비어있는 행/열(결측치) 제거
-        # TODO: utils.formatters를 활용해 특정 컬럼의 데이터 형식 맞추기 (예: 이자율 포맷 변환)
-        # return df
-        pass
 
-    def merge_dataframes(self, df_list):
+    def __init__(self):
+        # 사용할 각종 포매터들을 준비해 둡니다.
+        self.financial_formatter = FinancialTableFormatter()
+        # self.loan_formatter = LoanTableFormatter()  <- 나중에 0004번 파일용으로 추가될 부분
+
+    def process_data(self, extracted_rows: List[List[str]], table_type: str = "financial") -> List[List[str]]:
         """
-        여러 은행/조회처에서 추출된 DataFrame 리스트를 하나의 마스터 테이블로 병합합니다.
+        테이블 종류에 맞는 정제 파이프라인을 가동합니다.
+        
+        Args:
+            extracted_rows: OCR에서 추출된 날것의 2차원 리스트
+            table_type: 식별된 테이블의 종류 (기본값은 'financial'로 임시 고정)
         """
-        # TODO: 각 데이터프레임의 컬럼명을 하나로 통일 (예: '계좌 번호', '계좌번호' -> '계좌번호')
-        # TODO: pd.concat을 사용해 행 방향(아래쪽)으로 병합
-        # return merged_df
-        pass
+        if not extracted_rows:
+            return []
+
+        # 1. 예·적금 (금융상품) 테이블인 경우
+        if table_type == "financial":
+            return self.financial_formatter.process(extracted_rows)
+            
+        # 2. 대출/차입금 테이블인 경우 (예시)
+        # elif table_type == "loan":
+        #     return self.loan_formatter.process(extracted_rows)
+            
+        # 3. 알 수 없는 테이블인 경우 원본 그대로 반환
+        else:
+            return extracted_rows
