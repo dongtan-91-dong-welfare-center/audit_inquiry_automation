@@ -1,31 +1,64 @@
+# tests/integration/test_pipeline_flow.py
+
+import os
 import pytest
-import cv2
-import numpy as np
+from src.core.pdf_loader import PDFLoader
+from src.core.preprocessor import ImagePreprocessor
+from src.core.ocr_engine import OCRExtractor
+from src.core.postprocessor import PostProcessor
 
-class TestOCRIntegration:
-    """실제 데이터를 활용한 단계별 연결 및 전체 흐름 통합 테스트"""
+@pytest.mark.integration
+def test_pipeline_integration():
+    """
+    [파이프라인 연계 테스트]
+    PDFLoader -> Preprocessor -> OCRExtractor -> PostProcessor가 연계되었을 때
+    실제 은행 조회서 이미지가 최종적으로 어떻게 정제된 딕셔너리로 도출되는지 눈으로 확인합니다.
+    """
+    # 1. 테스트 데이터 준비
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    pdf_path = os.path.join(current_dir, "..", "data", "input", "(주)삼성전자_1_농협은행.pdf")
+    
+    print(f"\n▶ 1. PDF 파일 로딩 중: {os.path.basename(pdf_path)}")
+    loader = PDFLoader(pdf_path)
+    bank_name = loader.metadata["bank_name"]
+    page_images = loader.convert_to_images()
+    assert page_images is not None and len(page_images) > 0, "❌ PDF 로드 실패"
+    print(f"   - 로드 성공 (총 {len(page_images)} 페이지)")
 
-    @pytest.fixture
-    def real_pdf_path(self):
-        return "tests/data/raw_pdf/actual_bank_statement.pdf"
+    # 2. 전처리 (Preprocessor) 모듈 실행
+    print("\n▶ 2. 전처리 파이프라인 통과 중 (표 탐지 및 크롭)...")
+    preprocessor = ImagePreprocessor()
+    table_images = preprocessor.process_pages(page_images)
+    assert table_images, "❌ 표를 찾지 못했습니다."
+    print(f"   - 전처리 완료! 총 {len(table_images)}개의 표 영역 추출")
 
-    def test_step1_loader_to_pre(self, real_pdf_path):
-        """실제 PDF를 읽어 전처리(세로선 제거)까지의 흐름 확인"""
-        # 1. Loader 실행 (PDF -> List[np.ndarray])
-        # 2. Preprocessor 실행 (이미지 전처리)
-        # 사용자가 눈으로 확인할 수 있도록 중간 결과 저장 가능
-        # cv2.imwrite("tests/data/output/debug_preprocessed.png", pre_image)
-        assert True # 결과물의 shape이나 데이터 타입 검증
+    # 3. OCR (OCRExtractor) 모듈 실행
+    print("\n▶ 3. OCR 엔진 구동 및 표 데이터 추출 중...")
+    extractor = OCRExtractor()
+    all_tables_data = extractor.extract_table_data(table_images)
+    assert all_tables_data, "❌ OCR 추출 데이터가 없습니다."
 
-    def test_step2_pre_to_ocr(self):
-        """전처리된 이미지가 OCR 엔진을 거쳐 텍스트로 나오는지 확인"""
-        # 실제 전처리된 샘플 이미지를 로드하여 OCR 실행
-        # 추출된 텍스트가 비어있지 않은지, 특정 키워드(예: '계좌번호')를 포함하는지 확인
-        assert True
+    # 4. 후처리 (PostProcessor) 모듈 실행
+    print("\n▶ 4. PostProcessor 데이터 정제 및 분할 중...")
+    postprocessor = PostProcessor()
+    final_result = postprocessor.process_data(all_tables_data, bank_name=bank_name)
 
-    def test_full_pipeline_execution(self, real_pdf_path):
-        """[핵심] 전체 공정을 한 번에 이어서 실행"""
-        # 위에서 검증된 step1, step2 로직을 순차적으로 실행
-        # 최종 산출물(리스트 데이터)이 GROUND_TRUTH와 유사한지 확인
-        # excel_builder를 통해 실제 파일이 생성되는지까지 확인
-        assert True
+    print(f"\n▶ 데이터 후처리(정제) 결과 확인: {os.path.basename(pdf_path)}")
+    financial_table = final_result.get("financial_table", [])
+    loan_table = final_result.get("loan_table", [])
+
+    print(f"\n[ 🏦 금융상품(예·적금) 테이블 - 총 {len(financial_table)}건 추출 ]")
+    if not financial_table:
+        print("   데이터가 없습니다.")
+    else:
+        for i, row in enumerate(financial_table):
+            print(f"   Row {i:02d} | 칸 수: {len(row)} | 데이터: {row}")
+
+    print(f"\n[ 💰 대출거래 테이블 - 총 {len(loan_table)}건 추출 ]")
+    if not loan_table:
+        print("   데이터가 없습니다.")
+    else:
+        for i, row in enumerate(loan_table):
+            print(f"   Row {i:02d} | 칸 수: {len(row)} | 데이터: {row}")
+
+    print("\n=================================================================\n")
