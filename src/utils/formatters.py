@@ -217,12 +217,15 @@ class FinancialTableFormatter:
                     item = f"{digits[:4]}.{digits[4:6]}.{digits[6:]}"
 
             # =====================================================================
-            # [인덱스 7 이상] 비고 등 기타 컬럼
+            # [인덱스 7 ] 비고 등 기타 컬럼
             # =====================================================================
             else:
                 pass
 
             formatted.append(item)
+            
+        while len(formatted) < 8:
+            formatted.append("")
             
         return formatted
 

@@ -1,17 +1,17 @@
-# src/core/achieve/test_accuracy.py
+# tests/unit/test_accuracy.py
 
 import os
-import cv2
 import pytest
 
+from src.core.pdf_loader import PDFLoader
 from src.core.preprocessor import ImagePreprocessor
 from src.core.ocr_engine import OCRExtractor
 from src.core.postprocessor import PostProcessor
 
 # ==============================================================================
-# 표 1 (금융상품) 정답 데이터 (Ground Truth)
+# 금융상품 정답 데이터 (Ground Truth)
 # 형식: [상품종류, 계좌번호, 금액, 통화, 이자율, 최종이자지급일, 만기일, 비고]
-GROUND_TRUTH_TABLE_1 = [
+GROUND_TRUTH_FINANCIAL = [
     ['예금', '352-1244-7439-83', '350,000', 'KRW', '3.6%', '24.12.31', '26.01.03', ''],
     ['예금', '416-1241-7568-93', '602,418,268', 'KRW', '2.5%', '24.10.21', '26.10.31', '비고'],
     ['적금', '786-7653-2796-14', '213,269', 'KRW', '2.4%', '25.12.31', '26.12.31', ''],
@@ -59,11 +59,7 @@ GROUND_TRUTH_TABLE_1 = [
     ['예금', '118-9920-4476-09', '650,000', 'KRW', '2.7%', '25.12.31', '26.12.31', ''],
     ['적금', '264-5587-3310-72', '2,300', 'USD', '2.2%', '25.05.14', '27.05.14', ''],
     ['적금', '187-4428-7753-29', '95,000', 'JPY', '1.8%', '25.04.04', '26.12.31', ''],
-    ['예금', '420-1187-9034-51', '1,430,000', 'KRW', '2.1%', '25.12.31', '27.09.30', '']
-]
-# 표 2 (금융상품) 정답 데이터 (Ground Truth)
-# 형식: [상품종류, 계좌번호, 금액, 통화, 이자율, 최종이자지급일, 만기일, 비고]
-GROUND_TRUTH_TABLE_2 = [
+    ['예금', '420-1187-9034-51', '1,430,000', 'KRW', '2.1%', '25.12.31', '27.09.30', ''],
     ['적금', '556-7731-4018-28', '720,000', 'KRW', '2.4%', '25.10.14', '26.05.31', ''],
     ['예금', '655-1071-2834-46', '84,187', 'JPY', '2.0%', '25.05.14', '27.12.31', '비고'],
     ['예·적금', '418-8739-1925-80', '1,390,027', 'KRW', '1.6%', '25.11.30', '26.10.31', '비고'],
@@ -99,9 +95,10 @@ GROUND_TRUTH_TABLE_2 = [
     ['적금', '298-6614-7730-95', '120,000', 'JPY', '1.6%', '25.12.31', '26.06.30', '비고'],
     ['예금', '902-4417-6630-77', '1,100,000', 'KRW', '2.2%', '25.12.31', '27.12.31', '']
 ]
-# 표 3 (대출거래) 정답 데이터 (Ground Truth)
+
+# 대출거래 정답 데이터 (Ground Truth)
 # 형식: [대출종류, 약정금액, 대출잔액, 실행일, 만기일, 이자율, 이자지급일, 상환방법, 비고]
-GROUND_TRUTH_TABLE_3 = [
+GROUND_TRUTH_LOAN = [
     ['단기', '1,000,000', '1,000,000', '23.12.31', '26.12.31', '1.3%', '24.12.31', '만기일시', ''],
     ['단기', '1,600,000,000', '1,000,000,000', '19.10.31', '26.12.31', '1.7%', '24.12.31', '만기일시', '비고'],
     ['단기', '900,000', '900,000', '24.05.31', '26.12.31', '1.3%', '24.12.31', '만기일시', ''],
@@ -121,81 +118,124 @@ GROUND_TRUTH_TABLE_3 = [
     ['장기', '10,825,525', '10,825,525', '19.12.31', '29.12.31', '1.8%', '25.08.31', '만기일시', '비고']
 ]
 
-def calculate_field_accuracy(cleaned_row, ground_truth_row):
+def calculate_field_accuracy(cleaned_row, ground_truth_row, important_indices):
     """
-    한 행의 필드별 일치 여부를 계산합니다. (PostProcessor를 거쳤으므로 추가 필터링 최소화)
+    한 행의 필드별 일치 여부를 계산하며, '중요 항목(금액/이자/날짜)'의 일치 여부도 함께 반환합니다.
     """
     correct_count = 0
-    # 정답 필드 수만큼만 비교
-    for i in range(min(len(cleaned_row), len(ground_truth_row))):
-        if cleaned_row[i] == ground_truth_row[i]:
-            correct_count += 1
-            
-    return correct_count, len(ground_truth_row)
+    imp_correct_count = 0
+    
+    # 중요 항목 전체 개수 산정 (Ground truth 기준)
+    imp_total_count = len([i for i in important_indices if i < len(ground_truth_row)])
 
-def test_postprocessor_accuracy_comparison():
+    # 정답 필드 길이만큼 비교
+    for i in range(min(len(cleaned_row), len(ground_truth_row))):
+        is_match = (cleaned_row[i] == ground_truth_row[i])
+        
+        if is_match:
+            correct_count += 1
+            if i in important_indices:
+                imp_correct_count += 1
+            
+    return correct_count, len(ground_truth_row), imp_correct_count, imp_total_count
+
+@pytest.mark.integration
+def test_full_pipeline_accuracy():
     """
-    [후처리 정확도 검증 테스트]
-    PostProcessor를 통과한 최종 데이터와 Ground Truth를 비교하여 정확도를 산출합니다.
+    [엔드투엔드 파이프라인 정확도 검증 테스트]
+    PDF 업로드부터 PostProcessor 결과까지 전체 흐름의 추출 정확도를 산출합니다.
     """
-    # 1. 이미지 로딩
+    # 1. 파일 로딩 및 파이프라인 구동
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    img_path = os.path.join(current_dir, "..", "data", "input", "bank_audit_letter-0003.jpg")
-    raw_image = cv2.imread(img_path)
-    assert raw_image is not None
+    pdf_path = os.path.join(current_dir, "..", "data", "input", "(주)삼성전자_1_농협은행.pdf")
     
-    # 2. 파이프라인(담당자) 초기화 및 실행
+    loader = PDFLoader(pdf_path)
+    bank_name = loader.metadata["bank_name"]
+    page_images = loader.convert_to_images()
+    
     preprocessor = ImagePreprocessor()
-    extractor = OCRExtractor(psm=6)
+    table_images = preprocessor.process_pages(page_images)
+    
+    extractor = OCRExtractor()
+    all_tables_data = extractor.extract_table_data(table_images)
+    
     postprocessor = PostProcessor()
+    final_result = postprocessor.process_data(all_tables_data, bank_name=bank_name)
     
-    processed_tables = preprocessor.process_page(raw_image)
+    financial_table = final_result.get("financial_table", [])
+    loan_table = final_result.get("loan_table", [])
+
+    print("\n📊 [엔드투엔드 파이프라인 최종 정확도 리포트]")
+    print("=" * 90)
     
-    print("\n📊 [후처리(PostProcessor) 최종 정확도 리포트]")
-    print("-" * 50)
-    
-    # 첫 번째 표만 분석
-    raw_rows = extractor.extract_table_data(processed_tables[0])
-    
-    # [핵심] OCR 원본 데이터를 후처리기로 정제!
-    cleaned_rows = postprocessor.process_data(raw_rows)
-    
-    total_fields = 0
     total_correct = 0
+    total_fields = 0
+    imp_total_correct = 0
+    imp_total_fields = 0
     
-    # [개선] 헤더를 건너뛰고 실제 데이터가 시작되는 인덱스를 동적으로 탐색
-    start_offset = 0
-    for idx, row in enumerate(cleaned_rows):
-        # 줄의 첫 번째 칸이 상품명(예금, 적금, 예·적금)으로 시작하면 데이터의 시작점으로 간주
-        if row and row[0] in ['예금', '적금', '예·적금']:
-            start_offset = idx
-            break
+    # 중요 항목 인덱스 정의
+    fin_important_indices = [1, 2, 3, 4, 5, 6]  # 금액, 통화, 이자율, 최종이자지급일, 만기일
+    loan_important_indices = [1, 2, 3, 4, 5, 6]  # 약정한도액, 잔액, 대출일, 만기일, 이자율, 이자지급일
     
-    for i, gt_row in enumerate(GROUND_TRUTH):
-        current_row_idx = i + start_offset
-        if current_row_idx >= len(cleaned_rows):
+    # 2-1. 금융상품 테이블 정확도 비교
+    print("\n[ 🏦 금융상품(예·적금) 테이블 정확도 ]")
+    print("-" * 90)
+    for i, gt_row in enumerate(GROUND_TRUTH_FINANCIAL):
+        if i >= len(financial_table):
             break
             
-        cleaned_row = cleaned_rows[current_row_idx]
-        correct, total = calculate_field_accuracy(cleaned_row, gt_row)
+        cleaned_row = financial_table[i]
+        correct, total, imp_corr, imp_tot = calculate_field_accuracy(cleaned_row, gt_row, fin_important_indices)
         
         total_correct += correct
         total_fields += total
+        imp_total_correct += imp_corr
+        imp_total_fields += imp_tot
         
         acc = (correct / total) * 100
-        print(f"Row {current_row_idx:02d} | 정확도: {acc:6.1f}% | Correct: {correct}/{total}")
+        imp_acc = (imp_corr / imp_tot) * 100 if imp_tot > 0 else 0
         
-        # 100%가 아닐 경우에만 오답 노트 출력
+        print(f"Row {i:02d} | 전체: {acc:6.1f}% ({correct}/{total}) | 중요항목: {imp_acc:6.1f}% ({imp_corr}/{imp_tot})")
+        
         if acc < 100:
             print(f"   ㄴ [정답]: {gt_row}")
             print(f"   ㄴ [추출]: {cleaned_row}")
 
+    # 2-2. 대출거래 테이블 정확도 비교
+    print("\n[ 💰 대출거래 테이블 정확도 ]")
+    print("-" * 90)
+    for i, gt_row in enumerate(GROUND_TRUTH_LOAN):
+        if i >= len(loan_table):
+            break
+            
+        cleaned_row = loan_table[i]
+        correct, total, imp_corr, imp_tot = calculate_field_accuracy(cleaned_row, gt_row, loan_important_indices)
+        
+        total_correct += correct
+        total_fields += total
+        imp_total_correct += imp_corr
+        imp_total_fields += imp_tot
+        
+        acc = (correct / total) * 100
+        imp_acc = (imp_corr / imp_tot) * 100 if imp_tot > 0 else 0
+        
+        print(f"Row {i:02d} | 전체: {acc:6.1f}% ({correct}/{total}) | 중요항목: {imp_acc:6.1f}% ({imp_corr}/{imp_tot})")
+        
+        if acc < 100:
+            print(f"   ㄴ [정답]: {gt_row}")
+            print(f"   ㄴ [추출]: {cleaned_row}")
+
+    # 3. 최종 통합 정확도 산출
     final_accuracy = (total_correct / total_fields) * 100 if total_fields > 0 else 0
-    print("-" * 50)
-    print(f"✅ 최종 필드 정확도: {final_accuracy:.2f}%")
+    final_imp_accuracy = (imp_total_correct / imp_total_fields) * 100 if imp_total_fields > 0 else 0
     
-    # 목표 정확도 검증 (예: 95% 이상 기대)
+    print("=" * 90)
+    print(f"✅ 전체 문서 필드 정확도: {final_accuracy:.2f}% ( {total_correct} / {total_fields} )")
+    print(f"🌟 핵심 항목(금액/이자/날짜) 정확도: {final_imp_accuracy:.2f}% ( {imp_total_correct} / {imp_total_fields} )")
+    print("=" * 90)
+    
+    # 목표 정확도 검증 (전체 정확도 기준 95% 이상)
     assert final_accuracy > 95, f"❌ 최종 정확도가 목표치에 미달합니다: {final_accuracy:.2f}%"
 
 if __name__ == "__main__":
-    test_postprocessor_accuracy_comparison()
+    test_full_pipeline_accuracy()
