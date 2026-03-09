@@ -3,6 +3,8 @@
 import re
 from typing import List
 
+CURRENCIES = ['KRW', 'USD', 'JPY', 'EUR', 'CNY', 'DM']
+
 class FinancialTableFormatter:
     """
     [금융상품(예·적금) 테이블 전용 포매터(PaddleOCR 맞춤형)]
@@ -21,14 +23,13 @@ class FinancialTableFormatter:
             정제가 완료된 2차원 리스트
         """
         processed_data = []
-        valid_currencies = ['KRW', 'USD', 'JPY', 'EUR', 'CNY', 'DM']
         is_data_started = False  # 데이터 영역 진입 여부를 알리는 스위치
         for row in extracted_rows:
             # 1. 데이터 영역 시작 전(헤더 구간) 통화 기호 스캔
             # 첫 통화 기호가 나타나기 전까지의 행(컬럼명 등)만 버림.
             if not is_data_started:
                 # 현재 행에 통화 기호가 단 하나라도 있는지 검사
-                if any(currency in cell for cell in row for currency in valid_currencies):
+                if any(currency in cell for cell in row for currency in CURRENCIES):
                     is_data_started = True  # 이후 데이터는 모두 실제 데이터로 간주하여 처리 시작
                 else:
                     continue  # 스위치가 꺼져있고 통화 기호도 없으면 헤더이므로 스킵
@@ -64,7 +65,7 @@ class FinancialTableFormatter:
         # =====================================================================
         currency_idx = -1
         for i, cell in enumerate(row):
-            if cell in ['KRW', 'USD', 'JPY', 'EUR', 'CNY', 'DM']:
+            if cell in CURRENCIES:
                 currency_idx = i
                 break
                 
@@ -223,7 +224,7 @@ class FinancialTableFormatter:
                 pass
 
             formatted.append(item)
-            
+
         while len(formatted) < 8:
             formatted.append("")
             
