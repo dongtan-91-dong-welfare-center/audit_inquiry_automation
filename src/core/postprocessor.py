@@ -48,6 +48,12 @@ class PostProcessor:
                     loan_raw_rows.append(row)
                 else:
                     financial_raw_rows.append(row)
+        """
+        TODO: 현재는 '대출' 키워드가 등장하는 순간부터 끝까지를 대출거래 테이블로 간주하는 단순한 로직입니다.
+        현재는 파이썬3.14 버전과 가장 최신인 PaddleOcr3.4 버전의 의존성 관리가 어려워 Paddlecor 2.10 버전을 사용하고 있습니다. 
+        향후 OCR 엔진이 업그레이드 되어 PP-Structure 모델을 적용한다면 지능적으로 같은 테이블로 인식할 가능성이 있습니다.
+        이는 OCR 성능과도 직결되기 때문에 향후 실무에 사용하면서 고도화할 예정입니다.
+        """
 
         # 3. 각각 나누어진 Raw 데이터 덩어리를 포매터에 던져서 최종 정제
         processed_financial = self.financial_formatter.process(financial_raw_rows, bank_name)

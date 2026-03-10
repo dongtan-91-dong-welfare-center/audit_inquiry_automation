@@ -29,7 +29,7 @@ def scan_pdf_path():
     """
     # 프로젝트 루트 기준 경로 설정
     project_root = Path(__file__).parent.parent
-    path = project_root / "tests" / "data" / "input" / "bank_audit_letter-scan.pdf"
+    path = project_root / "tests" / "data" / "input" / "(주)삼성전자_1_농협은행.pdf"
 
     if not path.exists():
         # 파일이 없을 경우 테스트를 skip하게 만듦
