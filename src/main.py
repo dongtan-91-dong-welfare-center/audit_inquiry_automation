@@ -4,11 +4,6 @@ import sys
 import streamlit as st
 import os
 
-# 프로젝트 루트 디렉토리를 sys.path에 추가하여 src/core의 모듈들을 임포트할 수 있도록 설정
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if project_root not in sys.path:
-    sys.path.append(project_root)
-
 from core.pdf_loader import PDFLoader, DEFAULT_START_PAGE
 from core.preprocessor import ImagePreprocessor
 from core.ocr_engine import OCRExtractor
