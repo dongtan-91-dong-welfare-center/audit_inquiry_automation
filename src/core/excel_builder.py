@@ -22,7 +22,7 @@ class ExcelBuilder:
         current_file_path = os.path.abspath(__file__)
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_file_path)))
         self.template_dir = template_dir or os.path.join(project_root, "tests", "data", "templates")
-        self.output_dir = output_dir or os.path.join(project_root, "tests", "data", "output","excel_builder")
+        self.output_dir = output_dir or os.path.join(project_root, "tests", "data", "output")
         
         
         # 출력 폴더가 없다면 자동으로 생성합니다.
@@ -72,11 +72,13 @@ class ExcelBuilder:
         Returns:
             저장된 최종 엑셀 파일의 경로 (str)
         """
+        company_output_dir = os.path.join(self.output_dir, company_name)
+        os.makedirs(company_output_dir, exist_ok=True)
         # 1. 파일 경로 설정
         # os.path.join()은 운영체제(Windows, macOS, Linux 등)에 맞는 파일 경로 구분자(예: \ 또는 /)를 자동으로 사용하여 경로를 생성합니다.
         # 예를 들어, template_dir이 "tests/data/templates"이고 category가 "은행"일 때, template_path는 "tests/data/templates/template_은행.xlsx"가 됩니다.
         template_path = os.path.join(self.template_dir, f"template_{category}.xlsx")
-        output_path = os.path.join(self.output_dir, f"{company_name}_{category}.xlsx")
+        output_path = os.path.join(company_output_dir, f"{company_name}_{category}.xlsx")
 
         # 2. 분기 처리: 기존 파일이 없으면 템플릿 복사 (첫 회신서 처리)
         if not os.path.exists(output_path):
