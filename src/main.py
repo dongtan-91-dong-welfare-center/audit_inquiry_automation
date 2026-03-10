@@ -70,10 +70,10 @@ def process_workflow(uploaded_files, start_page, end_page):
             
             # 회사명을 추출하여 대표 이름으로 설정
             # 조회처명을 추출하여 
-            if idx == 0:
-                target_company_name = loader.metadata.get("company_name")
-                st.info(f"파싱된 감사대상회사: **{target_company_name}**")
+            target_company_name = loader.metadata.get("company_name")
             bank_name = loader.metadata.get("bank_name")
+            if idx == 0:
+                st.info(f"파싱된 감사대상회사: **{target_company_name}**")
             # 페이지 이미지 추출
             images = loader.convert_to_images(start_page=start_page, end_page=end_page)
             
@@ -91,8 +91,8 @@ def process_workflow(uploaded_files, start_page, end_page):
             )
         except Exception as e:
             error_name = type(e).__name__
-            st.error(f"파일 '{file.name}' 처리 중 [{error_name}] 오류가 발생했습니다: {e}")
-            return
+            st.error(f"파일 '{file.name}' 건너뜀 [{error_name}]: {e}")
+            continue
     
     progress_bar.progress(1.0, text="데이터 추출 및 엑셀 저장 완료!")
     st.success("🎉 모든 파일의 처리가 완료되었습니다!")
