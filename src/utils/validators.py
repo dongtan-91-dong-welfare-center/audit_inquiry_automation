@@ -5,6 +5,7 @@ import re
 """
 [공통 유틸 담당자]
 추출된 데이터가 상식적으로 올바른지(유효한지) 검사하는 함수 모음입니다.
+TODO: 실제 업무에 활용할 때쯤 PaddleOCR 성능이 업그레이드 되면 적용할 예정입니다.
 """
 
 def is_valid_account_number(acc_str):

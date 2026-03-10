@@ -5,6 +5,9 @@ import numpy as np
 import os
 import cv2
 
+# 기본 시작 페이지를 상수로 선언합니다.
+DEFAULT_START_PAGE = 3
+
 class PDFLoader:
     """
     [파일 처리 담당자]
@@ -22,12 +25,13 @@ class PDFLoader:
 
         # TODO: 파일명 유효성 및 확장자(.pdf) 검증 로직 추가 (validators.py 등 외부 유틸리티 연동 고려)
 
-    def convert_to_images(self, start_page: int = 3) -> list[np.ndarray]:
+    def convert_to_images(self, start_page: int = DEFAULT_START_PAGE, end_page: int = None) -> list[np.ndarray]:
         """
         PDF의 각 페이지를 순회하며 OpenCV에서 처리 가능한 고해상도(300 DPI) BGR 이미지 배열로 변환합니다.
 
         Args:
             start_page: 금융거래조회서는 3페이지부터 본문을 시작하고 있음
+            TODO: 실제 조회서는 송장을 PDF 맨 앞 페이지에 포함하므로 실제로 업무에 활용할 때는 4페이지로 변경
         Returns:
             list[numpy.ndarray]: 변환된 전체 페이지 이미지(BGR) 리스트
         """
@@ -35,7 +39,11 @@ class PDFLoader:
 
         # pdfplumber.open(self.uploaded_file)을 사용하여 PDF 스트림 열기
         with pdfplumber.open(self.uploaded_file) as pdf:
-            target_pages = pdf.pages[start_page - 1:]   # 인덱스는 0부터 시작
+            total_pages = len(pdf.pages)
+            # OCR 처리가 필요한 페이지 범위 설정 (기본적으로 3페이지부터 끝까지)
+            if end_page is None:
+                end_page = total_pages
+            target_pages = pdf.pages[start_page - 1:end_page]
 
             # pdf 내의 각 페이지(pages 속성)를 순회하는 반복문 작성
             for page in target_pages:
@@ -58,9 +66,9 @@ class PDFLoader:
     def _parse_filename(self) -> Dict[str, str]:
         """
         파일명 규칙 "감사대상회사_{숫자}_조회처"를 분석합니다.
-        예: "삼성전자_1_국민은행.pdf" -> {company: "삼성전자", bank: "국민은행", category: "은행"}
+        예: "삼성전자_1_국민은행.pdf" -> {company: "삼성전자", 조회처: "국민은행", category: "은행"}
         """
-        # TODO: category에서 금융거래조회서의 종류를 bank를 통해 추출하는 로직 추가
+        # TODO: category에서 금융거래조회서의 종류를 조회처를 통해 추출하는 로직 추가
         # 1. 기본값 설정
         metadata = {
             "company_name": "미분류_회사",
@@ -80,12 +88,10 @@ class PDFLoader:
         # 2. 형식 검증 (언더바가 최소 2개 이상 있어서 3개 이상의 파트가 나와야 함)
         if len(parts) < 3 or not parts[0] or not parts[2]:
             # 형식이 맞지 않는 경우
-            metadata["is_valid_format"] = False
-            # 파일명 전체를 회사명이나 조회처명에 임시로 할당하여 에러 방지
-            metadata["company_name"] = parts[0] if parts[0] else "형식오류_회사"
-            metadata["bank_name"] = "형식오류_조회처"
-
-            print(f"⚠️ 파일명 형식이 규칙에 맞지 않습니다: {filename}")
+            raise ValueError(
+                f"파일명 형식이 규칙('회사명_숫자_조회처')에 맞지 않습니다.\n"
+                f"현재 파일명: '{filename}'"
+            )
         else:
             # 정상 케이스
             metadata["company_name"] = parts[0]
