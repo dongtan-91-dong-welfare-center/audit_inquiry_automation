@@ -48,6 +48,22 @@ class TestPDFLoader:
             PDFLoader(mock_file)
 
     @pytest.mark.unit
+    @patch("pdfplumber.open")
+    def test_password_protected_pdf(self, mock_pdf_open):
+        """비밀번호가 걸린 PDF 처리 시 방어 로직이 동작하는지 확인합니다."""
+        # pdfplumber가 비밀번호가 걸린 파일을 열 때 발생하는 예외 모킹
+        from pdfminer.pdfdocument import PDFPasswordIncorrect
+        mock_pdf_open.side_effect = PDFPasswordIncorrect("")
+
+        mock_file = MagicMock()
+        mock_file.name = "(주)삼성전자_2_하나은행.pdf"
+        loader = PDFLoader(mock_file)
+
+        # 비밀번호 예외를 감지하고 적절한 에러 메시지를 반환하는지 검증
+        with pytest.raises(ValueError, match="비밀번호가 설정된|접근 권한"):
+            loader.convert_to_images()
+
+    @pytest.mark.unit
     def test_filename_parsing_logic(self):
         """파일명에서 회사명과 조회처가 올바르게 분리되는지 확인합니다."""
         mock_file = MagicMock()

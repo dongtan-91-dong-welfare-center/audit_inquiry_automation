@@ -1,6 +1,7 @@
 # src/core/pdf_loader.py
 from typing import Dict
 import pdfplumber
+from pdfminer.pdfdocument import PDFPasswordIncorrect
 import numpy as np
 import os
 import cv2
@@ -40,29 +41,36 @@ class PDFLoader:
         """
         all_pages_bgr = []
 
-        # pdfplumber.open(self.uploaded_file)을 사용하여 PDF 스트림 열기
-        with pdfplumber.open(self.uploaded_file) as pdf:
-            total_pages = len(pdf.pages)
-            # OCR 처리가 필요한 페이지 범위 설정 (기본적으로 3페이지부터 끝까지)
-            if end_page is None:
-                end_page = total_pages
-            target_pages = pdf.pages[start_page - 1:end_page]
+        try:
+            # pdfplumber.open(self.uploaded_file)을 사용하여 PDF 스트림 열기
+            with pdfplumber.open(self.uploaded_file) as pdf:
+                total_pages = len(pdf.pages)
+                # OCR 처리가 필요한 페이지 범위 설정 (기본적으로 3페이지부터 끝까지)
+                if end_page is None:
+                    end_page = total_pages
+                target_pages = pdf.pages[start_page - 1:end_page]
 
-            # pdf 내의 각 페이지(pages 속성)를 순회하는 반복문 작성
-            for page in target_pages:
-                # page.to_image(resolution=300)을 호출하여 각 페이지를 고해상도 이미지(PIL 객체)로 렌더링
-                img_pil = page.to_image(resolution=300).original    # resolution=300은 OCR 인식률 향상을 위한 고해상도 설정
+                # pdf 내의 각 페이지(pages 속성)를 순회하는 반복문 작성
+                for page in target_pages:
+                    # page.to_image(resolution=300)을 호출하여 각 페이지를 고해상도 이미지(PIL 객체)로 렌더링
+                    img_pil = page.to_image(resolution=300).original    # resolution=300은 OCR 인식률 향상을 위한 고해상도 설정
 
-                # 렌더링된 PIL 객체(기본 RGB 포맷)를 numpy.ndarray로 변환
-                img_array = np.array(img_pil)
+                    # 렌더링된 PIL 객체(기본 RGB 포맷)를 numpy.ndarray로 변환
+                    img_array = np.array(img_pil)
 
-                # cv2.cvtColor를 사용하여 RGB 채널을 OpenCV 기본 포맷인 BGR 채널로 변경
-                # PIL은 기본적으로 RGB 포맷이므로 OpenCV 처리를 위해 BGR로 변환이 필요
-                img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+                    # cv2.cvtColor를 사용하여 RGB 채널을 OpenCV 기본 포맷인 BGR 채널로 변경
+                    # PIL은 기본적으로 RGB 포맷이므로 OpenCV 처리를 위해 BGR로 변환이 필요
+                    img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
 
-                # 변환이 완료된 BGR 이미지 배열을 리스트에 담아 반환
-                # TODO: 대용량 파일 대비 제너레이터(yield) 패턴 사용 고려
-                all_pages_bgr.append(img_bgr)
+                    # 변환이 완료된 BGR 이미지 배열을 리스트에 담아 반환
+                    # TODO: 대용량 파일 대비 제너레이터(yield) 패턴 사용 고려
+                    all_pages_bgr.append(img_bgr)
+
+        except PDFPasswordIncorrect:
+            raise ValueError("비밀번호가 설정된 PDF 파일입니다. 접근 권한이 없어 내용을 읽을 수 없습니다.")
+        # TODO: 예외 세분화하기
+        except Exception as e:
+            raise ValueError(f"PDF 파일을 여는 중 오류가 발생했습니다.: {str(e)}")
 
         return all_pages_bgr
 
