@@ -37,14 +37,14 @@ class TestPDFLoader:
     def test_invalid_input_and_extension(self):
         """잘못된 입력(None) 및 확장자 핸들링을 테스트합니다."""
         # 1. None 입력 테스트
-        with pytest.raises(ValueError, match="지원하지 않는 파일 형식입니다"):
+        with pytest.raises(ValueError, match="업로드한 파일"):
             PDFLoader(None)
 
         # 2. 잘못된 확장자 테스트
         mock_file = MagicMock()
-        mock_file.name = "not_a_pdf.png"
+        mock_file.name = "(주)삼성은행_4_신한은행.png"
 
-        with pytest.raises(ValueError, match="지원하지 않는 파일 형식입니다|pdf 파일만"):
+        with pytest.raises(ValueError, match="지원하지 않는 파일 형식"):
             PDFLoader(mock_file)
 
     @pytest.mark.unit
@@ -62,6 +62,17 @@ class TestPDFLoader:
         # 비밀번호 예외를 감지하고 적절한 에러 메시지를 반환하는지 검증
         with pytest.raises(ValueError, match="비밀번호가 설정된|접근 권한"):
             loader.convert_to_images()
+
+    @pytest.mark.unit
+    def test_file_size_limit_exceeded(self):
+        """PDF 크기가 제한(예: 300MB)을 초과하는 경우 에러를 반환하는지 확인합니다."""
+        mock_file = MagicMock()
+        mock_file.name = "(주)삼성전자_3_우리은행.pdf"
+        # 파일 크기를 350MB (350 * 1024 * 1024 bytes)로 모킹
+        mock_file.size = 367001600
+
+        with pytest.raises(ValueError, match="크기 제한|300MB"):
+            PDFLoader(mock_file)
 
     @pytest.mark.unit
     def test_filename_parsing_logic(self):

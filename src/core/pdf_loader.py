@@ -24,10 +24,8 @@ class PDFLoader:
         self.uploaded_file = uploaded_file
         self.metadata = self._parse_filename()
 
-        # 파일명 유효성 및 확장자(.pdf) 검증 로직
-        if not self.uploaded_file or not self.uploaded_file.name.lower().endswith('.pdf'):
-            raise ValueError("지원하지 않는 파일 형식입니다. pdf 파일만 업로드 가능합니다.")
-
+        # 객체 생성 시점에 유효성 검사
+        self._validate_file()
 
     def convert_to_images(self, start_page: int = DEFAULT_START_PAGE, end_page: int = None) -> list[np.ndarray]:
         """
@@ -73,6 +71,28 @@ class PDFLoader:
             raise ValueError(f"PDF 파일을 여는 중 오류가 발생했습니다.: {str(e)}")
 
         return all_pages_bgr
+
+    def _validate_file(self, limit_mb: int = 300):
+        """
+        업로드된 파일의 유효성(확장자, 크기 등)을 종합적으로 검증합니다.
+        """
+        if not self.uploaded_file:
+            raise ValueError("업로드한 파일이 없습니다.")
+
+        # 확장자 검증
+        if not self.uploaded_file.name.lower().endswith('.pdf'):
+            raise ValueError("지원하지 않는 파일 형식입니다. pdf 파일만 업로드 가능합니다.")
+
+        # 파일 크기 검증
+        if hasattr(self.uploaded_file, 'size'):
+            file_size_bytes = self.uploaded_file.size
+            limit_bytes = limit_mb * 1024 * 1024
+
+            if file_size_bytes > limit_bytes:
+                raise ValueError(
+                    f"파일 크기 제한({limit_mb}MB)을 초과했습니다. "
+                    f"(현재 크기: {file_size_bytes / (1024 * 1024):.2f}MB)"
+                )
 
     def _parse_filename(self) -> Dict[str, str]:
         """
