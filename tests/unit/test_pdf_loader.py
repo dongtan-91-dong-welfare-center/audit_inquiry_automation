@@ -37,18 +37,15 @@ class TestPDFLoader:
     def test_invalid_input_and_extension(self):
         """잘못된 입력(None) 및 확장자 핸들링을 테스트합니다."""
         # 1. None 입력 테스트
-        loader_none = PDFLoader(None)
-        assert loader_none.uploaded_file is None
+        with pytest.raises(ValueError, match="지원하지 않는 파일 형식입니다"):
+            PDFLoader(None)
 
         # 2. 잘못된 확장자 테스트
         mock_file = MagicMock()
         mock_file.name = "not_a_pdf.png"
-        loader_invalid = PDFLoader(mock_file)
 
-        # TODO: PDFLoader 내부에 확장자 체크 로직을 추가하는 경우 에러 발생 여부를 체크
-        # with pytest.raises(ValueError):
-        #     loader_invalid.validate_extension()
-        assert loader_invalid.uploaded_file.name.endswith(".png")
+        with pytest.raises(ValueError, match="지원하지 않는 파일 형식입니다|pdf 파일만"):
+            PDFLoader(mock_file)
 
     @pytest.mark.unit
     def test_filename_parsing_logic(self):

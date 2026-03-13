@@ -23,7 +23,10 @@ class PDFLoader:
         self.uploaded_file = uploaded_file
         self.metadata = self._parse_filename()
 
-        # TODO: 파일명 유효성 및 확장자(.pdf) 검증 로직 추가 (validators.py 등 외부 유틸리티 연동 고려)
+        # 파일명 유효성 및 확장자(.pdf) 검증 로직
+        if not self.uploaded_file or not self.uploaded_file.name.lower().endswith('.pdf'):
+            raise ValueError("지원하지 않는 파일 형식입니다. pdf 파일만 업로드 가능합니다.")
+
 
     def convert_to_images(self, start_page: int = DEFAULT_START_PAGE, end_page: int = None) -> list[np.ndarray]:
         """
