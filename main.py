@@ -1,14 +1,13 @@
 # src/main.py
 
-import sys
 import streamlit as st
 import os
 
-from core.pdf_loader import PDFLoader, DEFAULT_START_PAGE
-from core.preprocessor import ImagePreprocessor
-from core.ocr_engine import OCRExtractor
-from core.postprocessor import PostProcessor
-from core.excel_builder import ExcelBuilder
+from src.core.pdf_loader import PDFLoader, DEFAULT_START_PAGE
+from src.core.preprocessor import ImagePreprocessor
+from src.core.ocr_engine import OCRExtractor
+from src.core.postprocessor import PostProcessor
+from src.core.excel_builder import ExcelBuilder
 
 def render_ui():
     """
