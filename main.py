@@ -1,4 +1,4 @@
-# src/main.py
+# main.py
 
 import streamlit as st
 import os
@@ -16,20 +16,20 @@ def render_ui():
     st.set_page_config(page_title="감사조회서 자동화 시스템", layout="wide")
     st.title("📄 감사조회서 데이터 추출 및 엑셀 자동화")
     st.markdown("업로드된 금융거래조회서(PDF)를 분석하여 엑셀 파일로 변환합니다.")
-    
+
     # 설정 영역
     # 가장 기본적인 조회서 양식을 가정하고 입력하지 않으면 4페이지까지 OCR 처리하도록 기본값을 설정
-    # TODO: 실제 업무에서는 송장이 PDF 맨 앞 페이지에 포함되어 있으므로 기본값을 5페이지로 변경 
+    # TODO: 실제 업무에서는 송장이 PDF 맨 앞 페이지에 포함되어 있으므로 기본값을 5페이지로 변경
     with st.expander("⚙️ 처리 설정", expanded=True):
         end_page = st.number_input("종료 페이지 (선택)", min_value=DEFAULT_START_PAGE, value=4, step=1, help=f"OCR을 수행할 마지막 페이지 번호(최소 {DEFAULT_START_PAGE}페이지 이상)")
-    
+
     # 파일 업로드 영역
     uploaded_files = st.file_uploader(
-        "PDF 파일들을 업로드하세요", 
-        type=["pdf"], 
+        "PDF 파일들을 업로드하세요",
+        type=["pdf"],
         accept_multiple_files=True
     )
-    
+
     # 실행 버튼
     if st.button("🚀 데이터 추출 및 엑셀 생성", type="primary"):
         if not uploaded_files:
@@ -43,7 +43,7 @@ def process_workflow(uploaded_files, start_page, end_page):
     """
     total_files = len(uploaded_files)
     progress_bar = st.progress(0, text="초기화 중...")
-    
+
     target_company_name = ""
     output_path = ""
 
@@ -57,20 +57,20 @@ def process_workflow(uploaded_files, start_page, end_page):
     for idx, file in enumerate(uploaded_files):
         status_text = f"[{idx+1}/{total_files}] '{file.name}' 처리 중..."
         progress_bar.progress(idx / total_files, text=status_text)
-        
+
         try:
             # 1. PDF Loader 초기화 및 메타데이터(파일명 정보) 파싱
             loader = PDFLoader(file)
-            
+
             # 회사명을 추출하여 대표 이름으로 설정
-            # 조회처명을 추출하여 
+            # 조회처명을 추출하여
             target_company_name = loader.metadata.get("company_name")
             bank_name = loader.metadata.get("bank_name")
             if idx == 0:
                 st.info(f"파싱된 감사대상회사: **{target_company_name}**")
             # 페이지 이미지 추출
             images = loader.convert_to_images(start_page=start_page, end_page=end_page)
-            
+
             # 2. Preprocessor
             table_images = preprocessor.process_pages(images)
             # 3. OCR_Engine
@@ -87,7 +87,7 @@ def process_workflow(uploaded_files, start_page, end_page):
             error_name = type(e).__name__
             st.error(f"파일 '{file.name}' 건너뜀 [{error_name}]: {e}")
             continue
-    
+
     progress_bar.progress(1.0, text="데이터 추출 및 엑셀 저장 완료!")
     st.success("🎉 모든 파일의 처리가 완료되었습니다!")
 
@@ -105,7 +105,7 @@ def process_workflow(uploaded_files, start_page, end_page):
         )
     else:
         st.error("엑셀 파일 생성에 실패했거나 경로를 찾을 수 없습니다.")
-    
+
     # TODO: 웹으로 서비스를 제공하게 되는 경우에 다운로드 버튼을 제공할 예정입니다.
 
 if __name__ == "__main__":
