@@ -133,6 +133,23 @@ class TestPDFLoader:
 
     @pytest.mark.unit
     @patch("pdfplumber.open")
+    def test_insufficient_pages(self, mock_pdf_open):
+        """페이지 개수가 3보다 적은 pdf를 입력할 때 제한 로직이 동작하는지 확인합니다."""
+        mock_pdf = MagicMock()
+        # 단 2장짜리 PDF 모킹
+        mock_pdf.pages = [MagicMock(), MagicMock()]
+        mock_pdf_open.return_value.__enter__.return_value = mock_pdf
+
+        mock_file = MagicMock()
+        mock_file.name = "(주)삼성전자_5_IM은행.pdf"
+        mock_file.size = 10 * 1024 * 1024
+        loader = PDFLoader(mock_file)
+
+        with pytest.raises(ValueError, match="파일의 페이지"):
+            loader.convert_to_images()
+
+    @pytest.mark.unit
+    @patch("pdfplumber.open")
     def test_edge_cases_handling(self, mock_pdf_open):
         """범위를 벗어난 페이지나 빈 PDF 파일에 대한 방어 로직을 검증합니다."""
         # 가짜 PDF 설정 (총 2페이지)

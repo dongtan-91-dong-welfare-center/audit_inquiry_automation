@@ -43,6 +43,13 @@ class PDFLoader:
             # pdfplumber.open(self.uploaded_file)을 사용하여 PDF 스트림 열기
             with pdfplumber.open(self.uploaded_file) as pdf:
                 total_pages = len(pdf.pages)
+
+                # 전체 페이지가 OCR 처리 시작 페이지보다 작은 경우 에러 반환
+                if total_pages < start_page:
+                    raise ValueError(
+                        f"파일의 페이지가 {start_page}보다 적습니다."
+                    )
+
                 # OCR 처리가 필요한 페이지 범위 설정 (기본적으로 3페이지부터 끝까지)
                 if end_page is None:
                     end_page = total_pages
