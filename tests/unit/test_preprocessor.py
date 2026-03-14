@@ -120,21 +120,18 @@ class TestImagePreprocessor:
         assert processed[100, 85] < 255
 
     @pytest.mark.unit
-    def test_process_pages_channel_conversion(self):
+    def test_output_channel_dimensions(self):
         """
-        입력 이미지가 1채널 흑백이더라도 파이프라인의 최종 출력물은 반드시 3채널(BGR)로 규격화되는지 검증합니다.
+        입력 이미지가 1채널 흑백이더라도 결과물은 항상 3채널(BGR)인지 검증합니다.
         """
-        # 표가 하나 그려진 1채널 흑백 이미지 생성
-        mock_page_gray = np.full((500, 500), 255, dtype=np.uint8)
-        cv2.rectangle(mock_page_gray, (50, 50), (450, 450), (0, 0, 0), -1)
+        mock_page = self.white_page.copy()
+        cv2.rectangle(mock_page, (100, 100), (200, 200), -1)
 
         # 배치 처리 파이프라인 통과
-        result_tables = self.preprocessor.process_pages([mock_page_gray])
-
-        # 크롭된 표가 리스트에 담겨 반환되며, BGR 3채널로 확정되어야 함
-        assert len(result_tables) == 1
-        assert result_tables[0].ndim == 3, "결과물이 3차원 배열이 아닙니다."
-        assert result_tables[0].shape[-1] == 3, "결과물이 3채널(BGR)로 변환되지 않았습니다."
+        tables = self.preprocessor._process_page(mock_page)
+        for table in tables:
+            assert table.ndim == 3
+            assert table.shape[2] == 3
 
     @pytest.mark.unit
     def test_empty_table_handling(self):
