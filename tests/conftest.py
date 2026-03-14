@@ -12,8 +12,8 @@ from unittest.mock import MagicMock
 # 프로젝트 루트 디렉토리를 sys.path에 추가
 # sys.path: 파이썬이 모듈이나 패키지를 찾을 때 훑어보는 경로 목록
 # sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
-PROJECT_ROOT = Path(__file__).parent
-sys.path.insert(0, str(PROJECT_ROOT))
+# PROJECT_ROOT = Path(__file__).parent
+# sys.path.insert(0, str(PROJECT_ROOT))
 """
 os.path.dirname(__file__): 본 파일의 경로(프로젝트 루트/tests/conftest.py)
 os.path.join(os.path.dirname(__file__), '../'): 프로젝트 루트의 상대 경로
@@ -67,10 +67,10 @@ def scan_pdf_path():
 
     return str(path)
 
-# Pytest 마커 정의 (커스텀 태그 등록)
-def pytest_configure(config):
-    """
-    커스텀 마커를 등록하여 'pytest -m integration' 처럼 실행할 수 있게 합니다.
-    """
-    config.addinivalue_line("markers", "integration: 실제 PDF 파일을 사용하는 무거운 통합 테스트")
-    config.addinivalue_line("markers", "unit: Mock을 사용하는 가벼운 단위 테스트")
+# # Pytest 마커 정의 (커스텀 태그 등록)
+# def pytest_configure(config):
+#     """
+#     커스텀 마커를 등록하여 'pytest -m integration' 처럼 실행할 수 있게 합니다.
+#     """
+#     config.addinivalue_line("markers", "integration: 실제 PDF 파일을 사용하는 무거운 통합 테스트")
+#     config.addinivalue_line("markers", "unit: Mock을 사용하는 가벼운 단위 테스트")
