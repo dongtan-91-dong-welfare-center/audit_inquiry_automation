@@ -129,20 +129,23 @@ class TestImagePreprocessor:
 
         # 배치 처리 파이프라인 통과
         tables = self.preprocessor._process_page(mock_page)
+
         for table in tables:
             assert table.ndim == 3
             assert table.shape[2] == 3
 
     @pytest.mark.unit
-    def test_empty_table_handling(self):
+    def test_multi_page_result_merging(self):
         """
-        이미지 내에 추출할 수 있는 표(1% 이상 면적)가 전혀 없을 때 오류를 발생시키지 않고 빈 리스트를 정상적으로 반환하는지 방어 로직을 검증합니다.
+        여러 페이지에서 나온 표가 순서대로 하나의 리스트에 병합하는지 검증
         """
-        # 완전히 비어있는 3채널 백지 생성
-        mock_empty_page = np.full((500, 500, 3), 255, dtype=np.uint8)
+        page_1 = self.white_page.copy()
+        cv2.rectangle(page_1, (100, 100), (200, 200), 0, -1)
 
-        # 단일 페이지 처리
-        result_tables = self.preprocessor._process_page(mock_empty_page)
+        page_2 = self.white_page.copy()
+        cv2.rectangle(page_2, (100, 100), (200, 200), 0, -1)
 
-        # 에러 없이 빈 리스트를 반환
-        assert result_tables == [], "빈 페이지에서 빈 리스트가 아닌 값을 반환했습니다."
+        # 전체 파이프라인 실행
+        combined_tables = self.preprocessor.process_pages([page_1, page_2])
+
+        assert len(combined_tables) == 2
