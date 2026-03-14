@@ -5,6 +5,7 @@ import os
 import numpy as np
 from src.core.preprocessor import ImagePreprocessor
 from src.core.pdf_loader import PDFLoader
+from tests.conftest import mock_image_factory
 
 
 @pytest.fixture(scope="module")
@@ -75,12 +76,11 @@ class TestImagePreprocessor:
     @pytest.mark.unit
     def test_empty_contour_handling(self):
         """표가 없는 이미지 입력 시 IndexError 없이 빈 리스트를 반화하는지 검증"""
-        empty_image = self.white_page.copy()
+        mock_page = self.white_page.copy()
 
-        result = self.preprocessor._process_page(empty_image)
+        result = self.preprocessor._process_page(mock_page)
 
-        assert isinstance(result, list)
-        assert len(result) == 0
+        assert result == []
 
     @pytest.mark.unit
     def test_multi_table_sorting_order(self):
@@ -105,34 +105,34 @@ class TestImagePreprocessor:
         """
         긴 세로선은 제거하되, 짧은 가로선(텍스트 대용)은 유지하는지 검증
         """
-        mock_page = self.white_page.copy()
+        test_img = np.full((200, 200), 255, dtype=np.uint8)
 
         # 제거 대상 세로선
-        cv2.line(mock_page, (100, 20), (100, 180), 0, 2)
+        cv2.line(test_img, (100, 20), (100, 180), 0, 2)
         # 보존 대상 가로선
-        cv2.line(mock_page, (80, 100), (120, 100), 0, 2)
+        cv2.line(test_img, (80, 100), (120, 100), 0, 2)
 
-        processed = self.preprocessor._remove_vertical_lines(mock_page)
+        processed = self.preprocessor._remove_vertical_lines(test_img)
 
         # 세로선 좌표는 흰색으로 변해야 함
         assert processed[20, 100] == 255
         # 가로선 좌표는 여전히 검은색(텍스트 보존)이어야 함
-        assert processed[100, 85] < 255
+        assert processed[100, 85] < 200
 
     @pytest.mark.unit
     def test_output_channel_dimensions(self):
         """
         입력 이미지가 1채널 흑백이더라도 결과물은 항상 3채널(BGR)인지 검증합니다.
         """
-        mock_page = self.white_page.copy()
-        cv2.rectangle(mock_page, (100, 100), (200, 200), -1)
+        gray_page = mock_image_factory(channels=1)
+        cv2.rectangle(gray_page, (100, 100), (200, 200), -1)
 
         # 배치 처리 파이프라인 통과
-        tables = self.preprocessor._process_page(mock_page)
+        tables = self.preprocessor.process_page([gray_page])
 
-        for table in tables:
-            assert table.ndim == 3
-            assert table.shape[2] == 3
+        assert len(tables) == 1
+        assert tables[0] == 3
+        assert tables[0].shape[2] == 3
 
     @pytest.mark.unit
     def test_multi_page_result_merging(self):
@@ -144,8 +144,9 @@ class TestImagePreprocessor:
 
         page_2 = self.white_page.copy()
         cv2.rectangle(page_2, (100, 100), (200, 200), 0, -1)
+        cv2.rectangle(page_2, (500, 500), (800, 800), 0, -1)
 
         # 전체 파이프라인 실행
         combined_tables = self.preprocessor.process_pages([page_1, page_2])
 
-        assert len(combined_tables) == 2
+        assert len(combined_tables) == 3

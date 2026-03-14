@@ -29,7 +29,7 @@ def mock_image_factory():
     테스트용 가짜 이미지를 생성하는 팩토리입니다.
     usage: mock_image_factory(height=500, width=500, channels=3)
     """
-    def _create_image(height=1000, width=1000, channels=1, color=255):
+    def _create_image(height=1000, width=1000, channels=3, color=255):
         if channels == 1:
             shape = (height, width)
         else:
