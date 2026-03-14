@@ -67,7 +67,7 @@ class TestPDFLoader:
 
     @pytest.mark.unit
     def test_file_size_limit_exceeded(self):
-        """PDF 크기가 제한(예: 300MB)을 초과하는 경우 에러를 반환하는지 확인합니다."""
+        """PDF 크기가 제한을 초과하는 경우 에러를 반환하는지 확인합니다."""
         mock_file = MagicMock()
         mock_file.name = "(주)삼성전자_3_우리은행.pdf"
         # 파일 크기를 350MB (350 * 1024 * 1024 bytes)로 모킹
@@ -111,7 +111,7 @@ class TestPDFLoader:
     @patch("src.core.pdf_loader.cv2.cvtColor")
     @patch("pdfplumber.open")
     def test_convert_to_images_slicing(self, mock_pdf_open, mock_cv2_convert):
-        """다양한 start_page 인자에 따라 올바른 페이지 수를 반환하는지 검증합니다."""
+        """PDF 슬라이싱 로직을 검증합니다."""
         # 공통 설정
         mock_cv2_convert.side_effect = lambda x, y: x
 
@@ -140,7 +140,7 @@ class TestPDFLoader:
     @patch("cv2.cvtColor")
     @patch("pdfplumber.open")
     def test_convert_to_images_invalid_pages(self, mock_pdf_open, mock_cv2_convert):
-        """DF 페이지 수가 시작 페이지 설정보다 적을 때의 에러 처리를 검증합니다."""
+        """PDF 페이지 수가 시작 페이지 설정보다 적을 때의 에러 처리를 검증합니다."""
         # 공통 설정
         mock_cv2_convert.side_effect = lambda x, y: x
 
