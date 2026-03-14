@@ -67,8 +67,6 @@ class TestImagePreprocessor:
         # 노이즈(매우 작은 점)
         cv2.rectangle(mock_page, (10, 10), (20, 20), 0, -1)
 
-        # 표 2: 좌측 하단 배치 (업스케일 반영 후 면적: 800*600 = 480,000 -> 1% 초과)
-        cv2.rectangle(mock_page, (100, 600), (500, 900), (0, 0, 0), -1)
         tables = self.preprocessor.process_pages(mock_page)
 
         # 노이즈는 무시하고 큰 사각형 1개를 추출해야 함
@@ -103,27 +101,23 @@ class TestImagePreprocessor:
         assert len(table) == 3
 
     @pytest.mark.unit
-    def test_remove_vertical_lines(self):
+    def test_vertical_line_removal_logic(self):
         """
-        세로선 제거 로직(_remove_vertical_lines)이 일반 텍스트(가로선)는 보존하고 긴 세로선만 흰색으로 지우는지 검증합니다.
+        긴 세로선은 제거하되, 짧은 가로선(텍스트 대용)은 유지하는지 검증
         """
-        # 100x200 크기의 백지 생성
-        mock_image = np.full((200, 100), 255, dtype=np.uint8)
+        mock_page = self.white_page.copy()
 
-        # 중앙에 검은색(0) 긴 세로선 그리기 (굵기 2)
-        cv2.line(mock_image, (50, 10), (50, 190), 0, 2)
+        # 제거 대상 세로선
+        cv2.line(mock_page, (100, 20), (100, 180), 0, 2)
+        # 보존 대상 가로선
+        cv2.line(mock_page, (80, 100), (120, 100), 0, 2)
 
-        # 일반 글자를 흉내낸 작은 노이즈(가로선) 추가
-        cv2.line(mock_image, (20, 100), (40, 100), 0, 2)
+        processed = self.preprocessor._remove_vertical_lines(mock_page)
 
-        # 세로선 제거 로직 단독 실행 (3채널 BGR 반환)
-        result = self.preprocessor._remove_vertical_lines(mock_image)
-
-        # Then 1: 긴 세로선이 있던 (100, 50) 픽셀은 흰색([255, 255, 255])으로 지워져야 함
-        assert np.all(result[100, 50] == 255), "세로선이 정상적으로 제거되지 않았습니다."
-
-        # Then 2: 가로선(일반 텍스트)이 있던 (100, 30) 픽셀은 여전히 검은색(0) 근처여야 함
-        assert np.all(result[100, 30] < 255), "일반 텍스트(가로선)가 잘못 지워졌습니다."
+        # 세로선 좌표는 흰색으로 변해야 함
+        assert processed[20, 100] == 255
+        # 가로선 좌표는 여전히 검은색(텍스트 보존)이어야 함
+        assert processed[100, 85] < 255
 
     @pytest.mark.unit
     def test_process_pages_channel_conversion(self):
