@@ -56,3 +56,56 @@ class TestFinancialTableFormatterUnit:
         assert result[0][4] == "3.5%"  # 이자율 소수점 및 % 부활 ('35' -> '3.5%')
         assert result[0][5] == "23.05.10"  # 날짜 마침표 부활
         assert result[0][7] == ""  # 부족했던 8번째 칸은 빈 문자열로 채워짐
+
+class TestLoanTableFormatterUnit:
+    """LoanTableFormatter (대출거래) 로직 검증"""
+
+    @pytest.mark.unit
+    def test_filter_valid_data(self):
+        # '%' 기호가 없는 헤더나 노이즈는 버려져야 함
+        raw_data = [
+            ["대출과목", "대출금액", "이율", "만기일"],
+            ["신용대출", "50,000,000", "5.5%", "24.12.31"]  # 이 줄만 통과해야 함
+        ]
+        result = LoanTableFormatter.process(raw_data)
+
+        assert len(result) == 1
+        assert "5.5%" in result[0]
+
+    @pytest.mark.unit
+    def test_alignment_and_fragment_recovery(self):
+        # Given: '%' 기준 앞뒤로 잘게 쪼개진 엉망진창 데이터
+        # 구조: [대출종류파편1, 2, 약정한도, 대출금액, 대출일파편1, 2, 만기일파편1, 2, 이자율(%), 이자지급일파편1, 2, 상환방법]
+        raw_row = [
+            "일반", "자금대출", "100000000", "50000000", "23", "0101", "24", "1231",
+            "45%",
+            "23", "0531", "만기일시상환"
+        ]
+
+        # When
+        result = LoanTableFormatter.process([raw_row])
+        row = result[0]
+
+        # Then: 9칸 표준 구조로 완벽히 재조립되어야 함
+        assert len(row) == 9
+        assert row[0] == "일반자금대출"  # 대출종류 병합
+        assert row[1] == "100,000,000"  # 약정한도 콤마 부활
+        assert row[2] == "50,000,000"  # 대출금액 콤마 부활
+        assert row[3] == "23.01.01"  # 대출일 병합 및 포매팅
+        assert row[4] == "24.12.31"  # 만기일 병합 및 포매팅
+        assert row[5] == "4.5%"  # 이자율 포매팅
+        assert row[6] == "23.05.31"  # 이자지급일 병합 및 포매팅
+        assert row[7] == "만기일시상환"  # 상환방법
+
+    @pytest.mark.unit
+    def test_missing_amount_defense(self):
+        # Given: 이율(%) 앞부분에 숫자로 된 금액 데이터가 아예 없는 예외 상황
+        raw_row = ["신용대출", "230101", "241231", "55%", "230531"]
+
+        # When
+        result = LoanTableFormatter.process([raw_row])
+        row = result[0]
+
+        # Then: 프로그램이 죽지 않고, 금액 2칸(약정한도, 대출금액)을 "확인바람"으로 채워야 함
+        assert row[1] == "확인바람"
+        assert row[2] == "확인바람"
