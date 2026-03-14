@@ -73,6 +73,10 @@ class PDFLoader:
 
         except PDFPasswordIncorrect:
             raise ValueError("비밀번호가 설정된 PDF 파일입니다. 접근 권한이 없어 내용을 읽을 수 없습니다.")
+
+        except ValueError as ve:
+            raise ve
+
         # TODO: 예외 세분화하기
         except Exception as e:
             raise ValueError(f"PDF 파일을 여는 중 오류가 발생했습니다.: {str(e)}")

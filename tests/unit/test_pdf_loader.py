@@ -139,45 +139,35 @@ class TestPDFLoader:
         assert len(loader.convert_to_images(start_page=1)) == 10
 
     @pytest.mark.unit
-    @patch("pdfplumber.open")
-    def test_insufficient_pages(self, mock_pdf_open):
-        """페이지 개수가 3보다 적은 pdf를 입력할 때 제한 로직이 동작하는지 확인합니다."""
-        mock_pdf = MagicMock()
-        # 단 2장짜리 PDF 모킹
-        mock_pdf.pages = [MagicMock(), MagicMock()]
-        mock_pdf_open.return_value.__enter__.return_value = mock_pdf
-
-        mock_file = MagicMock()
-        mock_file.name = "(주)삼성전자_5_IM은행.pdf"
-        mock_file.size = 10 * 1024 * 1024
-        loader = PDFLoader(mock_file)
-
-        with pytest.raises(ValueError, match="파일의 페이지"):
-            loader.convert_to_images()
-
-    @pytest.mark.unit
     @patch("cv2.cvtColor")
     @patch("pdfplumber.open")
     def test_edge_cases_handling(self, mock_pdf_open, mock_cv2_convert):
-        """범위를 벗어난 페이지나 빈 PDF 파일에 대한 방어 로직을 검증합니다."""
-
-        # cv2.cvtColor가 호출되면 입력받은 값을 그대로 반환하도록 설정(에러 방지)
+        """페이지 수에 따른 정상 처리 및 예외 핸들링을 검증합니다."""
+        # 공통 설정
         mock_cv2_convert.side_effect = lambda x, y: x
 
-        # 가짜 PDF 설정 (총 2페이지)
+        # 업로드 파일 모킹 (pdfloader 생성용)
+        mock_file = MagicMock()
+        mock_pdf_pages = [MagicMock()] * 10
+        mock_file.name = "(주)삼성전자_5_IM은행.pdf"
+        mock_file.size = 10 * 1024 * 1024
+
+        # pdf 내용 모킹
         mock_pdf = MagicMock()
         mock_pdf.pages = [MagicMock()] * 10
         mock_pdf_open.return_value.__enter__.return_value = mock_pdf
 
-        mock_file = MagicMock()
-        mock_file.name = "(주)삼성전자_7_한국은행.pdf"  # 파싱 로직 통과용
-        mock_file.size = 10 * 1024 * 1024  # 파일 크기 검증 통과용 (1MB)
         loader = PDFLoader(mock_file)
 
-        # Case A: 전체 페이지보다 큰 시작 페이지 요청
+        # 정상 케이스: 10페이지 PDF에서 5페이지부터 시작(결과: 6장)
         assert len(loader.convert_to_images(start_page=5)) == 6
 
-        # Case B: 빈 PDF 파일 (0페이지)
+        # 예외 케이스: 2페이지 PDF에서 3페이지부터 시작(결과: ValueError)
+        mock_pdf.pages = [MagicMock()] * 2
+        with pytest.raises(ValueError, match="파일의 페이지가"):
+            loader.convert_to_images()
+
+        # 예외 케이스: 0페이지(빈 파일) PDF인 경우
         mock_pdf.pages = []
         with pytest.raises(ValueError, match="파일의 페이지가"):
             loader.convert_to_images()
