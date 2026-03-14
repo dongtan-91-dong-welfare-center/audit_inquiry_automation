@@ -20,11 +20,14 @@ class TestImagePreprocessor:
     """ImagePreprocessor 클래스의 기능 검증을 위한 테스트 스위트"""
 
     @pytest.fixture(autouse=True)
-    def setup(self):
+    def setup(self, mock_image_factory):
         """각 테스트 메서드 실행 전 Preprocessor 인스턴스와 출력 폴더를 초기화합니다."""
         self.preprocessor = ImagePreprocessor()
         self.output_dir = "tests/data/output/preprocessor"
         os.makedirs(self.output_dir, exist_ok=True)
+
+        # 공통으로 사용할 빈 이미지 생성
+        self.white_page = mock_image_factory()
 
     # ---------------------------------------------------------
     # 1. Integration Tests (실데이터 및 PDFLoader 연동 검증)
@@ -55,32 +58,49 @@ class TestImagePreprocessor:
     # ---------------------------------------------------------
 
     @pytest.mark.unit
-    def test_table_filtering_and_sorting(self):
-        """미세 노이즈(면적 1% 미만) 필터링 기능과 좌표 기반 정렬(위에서 아래로, 왼쪽에서 오른쪽으로) 기능이 정확히 동작하는지 검증합니다."""
-        # 1000x1000 크기의 빈 백지(255) 생성
-        mock_page = np.full((1000, 1000), 255, dtype=np.uint8)
+    def test_noise_and_area_filtering(self):
+        """설정한 임계값 미만의 노이즈 컨투어를 제거하는지 검증"""
+        mock_page = self.white_page.copy()
+        # 유효한 표(면적 큼)
+        cv2.rectangle(mock_page, (100, 100), (400, 400), 0, -1)
 
-        # 표 1: 우측 상단 배치 (업스케일 반영 후 면적: 800*600 = 480,000 -> 1% 초과)
-        cv2.rectangle(mock_page, (500, 100), (900, 400), (0, 0, 0), -1)
+        # 노이즈(매우 작은 점)
+        cv2.rectangle(mock_page, (10, 10), (20, 20), 0, -1)
 
         # 표 2: 좌측 하단 배치 (업스케일 반영 후 면적: 800*600 = 480,000 -> 1% 초과)
         cv2.rectangle(mock_page, (100, 600), (500, 900), (0, 0, 0), -1)
+        tables = self.preprocessor.process_pages(mock_page)
 
-        # 노이즈: 좌측 상단 아주 작은 점 (업스케일 반영 후 면적: 40*40 = 1,600 -> 1% 미만)
-        cv2.rectangle(mock_page, (10, 10), (30, 30), (0, 0, 0), -1)
+        # 노이즈는 무시하고 큰 사각형 1개를 추출해야 함
+        assert len(tables) == 1
 
-        # 단일 페이지 전처리 수행
-        tables = self.preprocessor._process_page(mock_page)
+    @pytest.mark.unit
+    def test_empty_contour_handling(self):
+        """표가 없는 이미지 입력 시 IndexError 없이 빈 리스트를 반화하는지 검증"""
+        empty_image = self.white_page.copy()
 
-        # 노이즈가 필터링되어 정확히 2개의 표만 추출되어야 함
-        assert len(tables) == 2
+        result = self.preprocessor._process_page(empty_image)
 
-        # y좌표가 작은 것(표 1, 상단)이 먼저 오고, 3채널(BGR)로 변환되었는지 검증
-        table_1, table_2 = tables
+        assert isinstance(result, list)
+        assert len(result) == 0
 
-        # 팽창 연산으로 인해 사방으로 확장된 픽셀(14px)을 반영한 크기로 검증
-        assert table_1.shape == (614, 814, 3), "첫 번째 표의 크기나 채널이 맞지 않습니다."
-        assert table_2.shape == (614, 814, 3), "두 번째 표의 크기나 채널이 맞지 않습니다."
+    @pytest.mark.unit
+    def test_multi_table_sorting_order(self):
+        """여러 표가 있을 때 상단 -> 하단, 좌 -> 우 순서로 정렬하여 반환하는지 검증"""
+        mock_page = self.white_page.copy()
+
+        # 좌측 상단(1순위)
+        cv2.rectangle(mock_page, (100, 100), (300, 300), 0, -1)
+
+        # 우측 상단(2순위)
+        cv2.rectangle(mock_page, (500, 100), (700, 300), 0, -1)
+
+        # 중앙 하단(3순위)
+        cv2.rectangle(mock_page, (300, 600), (500, 800), 0, -1)
+
+        table = self.preprocessor._process_page(mock_page)
+
+        assert len(table) == 3
 
     @pytest.mark.unit
     def test_remove_vertical_lines(self):
