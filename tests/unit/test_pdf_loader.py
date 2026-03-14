@@ -110,45 +110,42 @@ class TestPDFLoader:
     @pytest.mark.unit
     @patch("src.core.pdf_loader.cv2.cvtColor")
     @patch("pdfplumber.open")
-    def test_page_slicing_and_default_logic(self, mock_pdf_open, mock_cv2_convert):
-        """페이지 슬라이싱 로직과 기본값(3페이지) 적용 여부를 통합 검증합니다."""
-        # 1. 가짜 PDF 설정 (총 10페이지)
-        mock_pdf = MagicMock()
-        mock_page  = MagicMock()
-
-        # page.to_image().original이 호출될 때 반환할 가짜 값
-        mock_page.to_image.return_value.original = np.zeros((100, 100, 3), dtype=np.uint8)
-        mock_pdf.pages = [MagicMock()] * 10
-        mock_pdf_open.return_value.__enter__.return_value = mock_pdf
-
-        # cv2.cvtColor 호출 시 입력받은 것을 그대로 변환
-        mock_cv2_convert.side_effect = lambda x, y: x
-
-        mock_file = MagicMock()
-        mock_file.name = "(주)삼성전자_6_제주은행.pdf"
-        mock_file.size = 10* 1024 * 1024
-        loader = PDFLoader(mock_file)
-
-        # Case A: 3페이지부터 시작 (10 - 2 = 8개 기대)
-        assert len(loader.convert_to_images(start_page=3)) == 8
-
-        # Case B: 인자 생략 시 기본값(3) 적용 확인
-        assert len(loader.convert_to_images()) == 8
-
-        # Case C: 1페이지부터 전체 로드 (10개 기대)
-        assert len(loader.convert_to_images(start_page=1)) == 10
-
-    @pytest.mark.unit
-    @patch("cv2.cvtColor")
-    @patch("pdfplumber.open")
-    def test_edge_cases_handling(self, mock_pdf_open, mock_cv2_convert):
-        """페이지 수에 따른 정상 처리 및 예외 핸들링을 검증합니다."""
+    def test_convert_to_images_slicing(self, mock_pdf_open, mock_cv2_convert):
+        """다양한 start_page 인자에 따라 올바른 페이지 수를 반환하는지 검증합니다."""
         # 공통 설정
         mock_cv2_convert.side_effect = lambda x, y: x
 
         # 업로드 파일 모킹 (pdfloader 생성용)
         mock_file = MagicMock()
-        mock_pdf_pages = [MagicMock()] * 10
+        mock_file.name = "(주)삼성전자_6_제주은행.pdf"
+        mock_file.size = 10 * 1024 * 1024
+
+        # pdf 내용 모킹
+        mock_pdf = MagicMock()
+        mock_pdf.pages = [MagicMock()] * 10
+        mock_pdf_open.return_value.__enter__.return_value = mock_pdf
+
+        loader = PDFLoader(mock_file)
+
+        # Case A: 기본값 적용 (3페이지부터 끝까지 -> 8개)
+        assert len(loader.convert_to_images()) == 8
+
+        # Case B: 특정 페이지 지정 (5페이지부터 끝까지 -> 6개)
+        assert len(loader.convert_to_images(start_page=5)) == 6
+
+        # Case C: 1페이지부터 전체 로드 (10개)
+        assert len(loader.convert_to_images(start_page=1)) == 10
+
+    @pytest.mark.unit
+    @patch("cv2.cvtColor")
+    @patch("pdfplumber.open")
+    def test_convert_to_images_invalid_pages(self, mock_pdf_open, mock_cv2_convert):
+        """DF 페이지 수가 시작 페이지 설정보다 적을 때의 에러 처리를 검증합니다."""
+        # 공통 설정
+        mock_cv2_convert.side_effect = lambda x, y: x
+
+        # 업로드 파일 모킹 (pdfloader 생성용)
+        mock_file = MagicMock()
         mock_file.name = "(주)삼성전자_5_IM은행.pdf"
         mock_file.size = 10 * 1024 * 1024
 
@@ -159,16 +156,18 @@ class TestPDFLoader:
 
         loader = PDFLoader(mock_file)
 
-        # 정상 케이스: 10페이지 PDF에서 5페이지부터 시작(결과: 6장)
-        assert len(loader.convert_to_images(start_page=5)) == 6
-
-        # 예외 케이스: 2페이지 PDF에서 3페이지부터 시작(결과: ValueError)
+        # Case A: 2페이지 PDF에서 3페이지(기본값) 시작 요청 시 에러
         mock_pdf.pages = [MagicMock()] * 2
         with pytest.raises(ValueError, match="파일의 페이지가"):
             loader.convert_to_images()
 
-        # 예외 케이스: 0페이지(빈 파일) PDF인 경우
+        # Case B: 0페이지(빈 파일) PDF일 때 에러
         mock_pdf.pages = []
         with pytest.raises(ValueError, match="파일의 페이지가"):
             loader.convert_to_images()
+
+        # Case C: 시작 페이지를 10으로 주었는데 실제론 5페이지일 때
+        mock_pdf.pages = [MagicMock()] * 5
+        with pytest.raises(ValueError, match="파일의 페이지가"):
+            loader.convert_to_images(start_page=10)
 
