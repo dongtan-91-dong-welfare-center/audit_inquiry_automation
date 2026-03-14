@@ -117,7 +117,9 @@ class ImagePreprocessor:
             return []
 
         # 문서 순서(위->아래, 왼쪽->오른쪽)에 따른 정렬
-        table_images.sort(key=lambda s: (s['y'], s['x']))
+        sorted_tables = self._sort_tables_by_coordinates(table_images)
+
+        return [image['img'] for image in sorted_tables]
 
         return [image['img'] for image in table_images]
 
@@ -152,3 +154,17 @@ class ImagePreprocessor:
         # 3채널(BGR)로 변환하여 반환
         result_bgr = cv2.cvtColor(result_gray, cv2.COLOR_GRAY2BGR)
         return result_bgr
+
+    @staticmethod
+    def _sort_tables_by_coordinates(table_metadata: list[dict]) -> list[dict]:
+        """
+        추출한 표의 메타데이터를 문서 순서(Y축 하행, X축 우행)로 정렬합니다.
+
+        Args:
+            table_metadata (list[dict]): 추출된 표 이미지 객체와 좌상단 좌표 정보를 담은 딕셔너리의 리스트
+                                         (예: [{'img': np.ndarray, 'y': int, 'x': int}, ...])
+
+        Returns:
+            list[dict]: 위에서 아래로(Y축 오름차순), 같은 높이일 경우 왼쪽에서 오른쪽으로(X축 오름차순) 정렬이 완료된 딕셔너리 리스트
+        """
+        return sorted(table_metadata, key=lambda s: (s['y'], s['x']))
