@@ -10,13 +10,26 @@
 시스템은 단방향 데이터 파이프라인 구조를 가지며, 각 단계는 독립적인 모듈로 구성되어 있습니다.
 
 ```mermaid
-graph TD
-    A[UI / Frontend<br>(Streamlit)] -->|PDF Upload| B(PDF Loader)
+graph LR
+    subgraph Input_Layer [입력 및 전처리]
+    A[UI / Frontend<br>Streamlit] -->|PDF Upload| B(PDF Loader)
     B -->|300 DPI Image| C(Preprocessor)
-    C -->|Cropped Table Image| D(OCR Engine)
-    D -->|Standardized Raw Data| E(Postprocessor & Validators)
-    E -->|Structured Data| F(Excel Builder)
+    end
+
+    subgraph Processing_Layer [데이터 추출]
+    C -->|Cropped Table| D{OCR Engine}
+    D -->|Raw Data| E(Postprocessor)
+    end
+
+    subgraph Output_Layer [결과 생성]
+    E -->|Structured Data| F[Excel Builder]
     F -->|Formatted .xlsx| A
+    end
+
+    %% 스타일 정의
+    style D fill:#f9f,stroke:#333,stroke-width:2px
+    style A fill:#bbf,stroke:#333
+    style F fill:#bfb,stroke:#333
 
 ```
 
