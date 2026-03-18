@@ -124,12 +124,12 @@ class ImagePreprocessor:
     @staticmethod
     def _filter_valid_contours(contours: tuple, total_area: float, min_area_ratio: float = 0.01) -> list[np.ndarray]:
         """
-        탐지된 외곽선 중 최소 면적 비율(기본 1%)을 충족하는 유효 컨투어만 반환합니다.
+        탐지된 외곽선 중 최소 면적 비율(1% 초과)을 충족하는 유효 컨투어만 반환합니다.
 
         Args:
             contours (tuple): cv2.findContours 함수를 통해 탐지된 외곽선(컨투어) 데이터 튜플
             total_area (float): 기준이 되는 원본/전처리 이미지의 전체 면적 (가로 x 세로)
-            min_area_ratio (float): 유효한 표 영역으로 간주할 최소 면적 비율 (기본값: 0.01, 즉 1%)
+            min_area_ratio (float): 유효한 표 영역으로 간주할 최소 면적 비율 (기본값: 0.01, 즉 1% 초과)
 
         Returns:
             list[np.ndarray]: 지정된 최소 면적 비율 조건을 만족하는 유효한 컨투어 배열들의 리스트
