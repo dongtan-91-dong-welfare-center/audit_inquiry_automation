@@ -1,15 +1,35 @@
 [project]
-name = "standard-goverance-template"
+name = "audit-inquiry-automation"
 version = "0.1.0"
 description = ""
 authors = [
-    {name = "qldrh112",email = "didie8520@gmail.com"}
-]
-readme = "README.md"
-requires-python = ">=3.11"
-dependencies = [
+    {name = "PDW-Accountant",email = "kkk273@naver.com"}
 ]
 
+license = {text = "DONGTAN 91-DONG WELFARE CENTER"}
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "paddlepaddle (>=2.6.0,<3.0.0)",
+    "paddleocr (>=2.7.0)",
+    "numpy (<2.0.0)",
+    "protobuf (>=3.20.0,<4.0.0)",
+    "pydantic (>=1.10,<2.0.0)",
+    "pytest (>=9.0.2,<10.0.0)",
+    "openpyxl (>=3.1.0,<4.0.0)",
+
+    # OpenCV 버전을 numpy 1.x와 호환되는 4.9.x 버전대로 낮춥니다.
+    "opencv-python (>=4.9.0,<4.10.0)"
+]
+
+[tool.poetry]
+package-mode = false
+
+[dependency-groups]
+dev = [
+    "streamlit (>=1.54.0,<2.0.0)"
+]
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
