@@ -9,6 +9,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
 
+# 아래 내용은 이전에 사용했던 방식으로 현재는 사용하지 않으나 이해를 위해 주석으로 남겨둡니다.
 # 프로젝트 루트 디렉토리를 sys.path에 추가
 # sys.path: 파이썬이 모듈이나 패키지를 찾을 때 훑어보는 경로 목록
 # sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
@@ -67,6 +68,8 @@ def scan_pdf_path():
 
     return str(path)
 
+# 아래 내용은 이전에 사용했던 방식으로 현재는 사용하지 않으나 이해를 위해 주석으로 남겨둡니다.
+# 현재는 pyproject.toml의 [tool.pytest.ini_options]에 정의하고 있습니다.
 # # Pytest 마커 정의 (커스텀 태그 등록)
 # def pytest_configure(config):
 #     """
