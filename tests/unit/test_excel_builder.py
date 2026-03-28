@@ -70,8 +70,8 @@ class TestExcelBuilderUnit:
 
         # 1. 파일 시스템 상태 모의: os.path.exists
         # 처음 호출(출력 파일 확인) 시 False 반환 -> 두 번째 호출(템플릿 파일 확인) 시 True 반환
-        # if not os.path.exists(output_path) -> False
-        # if not os.path.exists(template_path) -> True
+        # os.path.exists(output_path) -> False를 입력하여 조건문의 평가를 True로 진행함
+        # os.path.exists(template_path) -> True를 입력하여 조건문의 평가를 True로 진행하여 템플릿 복사가 일어나게 함
         mock_exists.side_effect = [False, True, True, True]
 
         # 2. openpyxl 워크북 및 워크시트 상태 모의
