@@ -56,7 +56,7 @@ class TestImagePreprocessor:
 
     @pytest.mark.unit
     def test_table_filtering_and_sorting(self):
-        """미세 노이즈(면적 1% 미만) 필터링 기능과 좌표 기반 정렬(위에서 아래로, 왼쪽에서 오른쪽으로) 기능이 정확히 동작하는지 검증합니다."""
+        """미세 노이즈(면적 1% 초과) 필터링 기능과 좌표 기반 정렬(위에서 아래로, 왼쪽에서 오른쪽으로) 기능이 정확히 동작하는지 검증합니다."""
         # 1000x1000 크기의 빈 백지(255) 생성
         mock_page = np.full((1000, 1000), 255, dtype=np.uint8)
 
@@ -125,7 +125,7 @@ class TestImagePreprocessor:
     @pytest.mark.unit
     def test_empty_table_handling(self):
         """
-        이미지 내에 추출할 수 있는 표(1% 이상 면적)가 전혀 없을 때 오류를 발생시키지 않고 빈 리스트를 정상적으로 반환하는지 방어 로직을 검증합니다.
+        이미지 내에 추출할 수 있는 표(1%를 초과하는 면적)가 전혀 없을 때 오류를 발생시키지 않고 빈 리스트를 정상적으로 반환하는지 방어 로직을 검증합니다.
         """
         # 완전히 비어있는 3채널 백지 생성
         mock_empty_page = np.full((500, 500, 3), 255, dtype=np.uint8)

@@ -100,7 +100,7 @@ class ImagePreprocessor:
 
         table_images = []
 
-        # 페이지 면적의 1% 이상의 외곽선만 표로 간주 (미세 노이즈 배제)
+        # 페이지 면적의 1%를 초과하는 외곽선만 표로 간주 (미세 노이즈 배제)
         min_table_area = (upscaled.shape[0] * upscaled.shape[1]) * 0.01
 
         for cnt in contours:
