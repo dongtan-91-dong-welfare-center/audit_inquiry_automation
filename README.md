@@ -7,8 +7,8 @@
 * **Frontend / UI:** Streamlit
 * **PDF Processing:** pdfplumber
 * **Computer Vision:** OpenCV (`cv2`)
-* **OCR Engine:** PaddleOCR
-* **Package Management:** Poetry
+* **OCR Engine:** PaddleOCR (macOS의 경우 Docker + FastAPI 기반 API 서버 활용)
+* **Package Management:** uv
 > **참고:** 각 기술 스택의 상세 도입 배경 및 프레임워크 비교 내용은 [`docs/architecture/adr_summary.md`](docs/architecture/adr_summary.md)를 확인해 주세요.
 
 ## 📂 폴더 구조
@@ -47,15 +47,29 @@ audit_inquiry_automation/
 > **참고:** 상세한 화면 구성 및 각 단계별 사용 가이드는 [`docs/operation/user_manual.md`](docs/operation/user_manual.md)를 참고해 주세요. OCR 데이터 추출 로직의 상세 과정은 [`docs/technical/ocr_pipeline_details.md`](docs/technical/ocr_pipeline_details.md)에 기술되어 있습니다.
 
 ## ⚙️ 환경 설정
-본 프로젝트는 **Poetry**를 기반으로 패키지 의존성을 관리합니다.
+본 프로젝트는 **uv**를 기반으로 패키지 의존성을 관리합니다. 운영체제에 따라 OCR 엔진의 구동 방식이 다르므로 주의가 필요합니다.
+### Windows / Linux (기본 로컬 실행)
 ```bash
 # 1. 의존성 설치
-poetry install
+uv sync
 
 # 2. 시스템 실행
-poetry run streamlit run main.py
+uv run streamlit run main.py
 ```
-> **참고:** OS별 환경 설정(OpenCV, 그래픽 라이브러리 등) 및 상세 설치 가이드는 [`docs/operation/install_guide.md`](docs/operation/install_guide.md)를 확인해 주세요.
+
+### macOS (Apple Silicon)
+Apple M칩 환경에서는 라이브러리 충돌 방지를 위해 OCR 엔진을 Docker 컨테이너로 분리하여 실행합니다. (.env 파일에 USE_REMOTE_OCR=True 설정 필요)
+
+``` bash
+# 1. OCR API 서버(Docker) 백그라운드 실행
+docker build -t ocr-engine-api .
+docker run -d -p 8000:8000 --name ocr-server ocr-engine-api
+
+# 2. 시스템 실행
+uv run streamlit run main.py
+```
+
+🚨 주의: OS별 상세 환경 설정(Docker, OrbStack 등) 및 트러블슈팅은 반드시 [`docs/operation/install_guide.md`](docs/operation/install_guide.md)를 먼저 확인해 주세요.
 
 ## 📊 테스트
 시스템 안정성과 OCR 인식률을 보장하기 위해 `pytest`를 활용한 다각도 테스트가 구성되어 있습니다.

@@ -1,38 +1,55 @@
 # 설치 및 환경 설정 가이드
 
 ## 1. 개요
-본 문서는 '금융거래조회서 키인 자동화 시스템'을 로컬 환경 또는 운영 서버에 구축하기 위한 설치 및 설정 방법을 안내합니다. 본 프로젝트는 의존성 관리를 위해 **Poetry**를 사용하며, 웹 UI 구성을 위해 **Streamlit**을, 광학 문자 인식을 위해 **PaddleOCR**을 핵심 엔진으로 사용합니다.
+본 문서는 '금융거래조회서 키인 자동화 시스템'을 로컬 환경 또는 운영 서버에 구축하기 위한 설치 및 설정 방법을 안내합니다. 본 프로젝트는 의존성 관리를 위해 **uv**를 사용하며, 웹 UI 구성을 위해 **Streamlit**을, 광학 문자 인식을 위해 **PaddleOCR**을 핵심 엔진으로 사용합니다.
 
 ## 2. 시스템 요구사항
 시스템을 실행하기 위해 사전에 아래의 환경이 준비되어야 합니다.
-* **OS:** Windows 10 이상, macOS, 또는 Linux (Ubuntu 20.04+ 권장)
+* **OS:** Windows 10 이상, macOS (Apple Silicon 포함), 또는 Linux (Ubuntu 20.04+ 권장)
 * **Python:** 3.9 이상 3.11 이하 (의존성 패키지 호환성 권장)
-* **Package Manager:** Poetry (버전 1.4 이상)
+* **Package Manager:** uv
+* **Container Runtime (macOS 한정):** Docker Desktop 또는 **OrbStack**(강력 권장)
 
 ## 3. 설치 프로세스
 
 ### 3.1. 저장소 클론 및 패키지 설치
-프로젝트 소스 코드를 로컬 환경으로 가져온 후, `pyproject.toml`과 `poetry.lock`을 기반으로 의존성 패키지를 설치합니다.
+프로젝트 소스 코드를 로컬 환경으로 가져온 후, `pyproject.toml`과 `uv.lock`을 기반으로 의존성 패키지를 설치합니다.
 
 ```bash
 # 1. 프로젝트 저장소 클론 (경로는 실제 환경에 맞게 수정)
 git clone https://github.com/dongtan-91-dong-welfare-center/audit_inquiry_automation.git
 cd audit_inquiry_automation
 
-# 2. Poetry를 통한 가상환경 생성 및 의존성 패키지 설치
-poetry install
+# 2. uv를 통한 가상환경 생성 및 의존성 패키지 설치
+uv sync
 ```
-*※ `poetry install` 실행 시 `pdfplumber`, `opencv-python`, `paddleocr`, `streamlit` 등의 핵심 라이브러리가 자동으로 설치됩니다.*
+*※ `uv sync` 실행 시 `pdfplumber`, `opencv-python`, `paddleocr`, `streamlit` 등의 핵심 라이브러리가 자동으로 설치됩니다.*
 
 ### 3.2. 시스템 의존성 라이브러리 설치 (OS별)
-**OpenCV** 및 **PaddleOCR**이 정상적으로 이미지를 처리하기 위해 OS 레벨의 그래픽 라이브러리가 필요할 수 있습니다.
+본 프로젝트는 운영체제에 따른 라이브러리 충돌(OpenMP)을 방지하기 위해 OS별 맞춤형 OCR 실행 구조를 가집니다. 본인의 개발 환경에 맞는 설정을 진행해 주세요.
 
-* **Linux (Ubuntu) 환경:**
-  ```bash
-  sudo apt-get update
-  sudo apt-get install libgl1-mesa-glx libglib2.0-0
+* **Windows/Linux 환경:** 
+  Windows 및 일반 Linux 환경에서는 별도의 설정 없이 로컬 엔진이 정상 작동합니다.
+  (참고) Linux 환경에서 이미지 처리에러 발생 시 아래 시스템 라이브러리 설치 필요:
+
+  `sudo apt-get update && sudo apt-get install libgl1 libglib2.0-0`
+
+* **macOS (Apple Silicon) 환경:**
+  Apple M칩 환경에서는 패키지 충돌 방지를 위해 OCR 엔진을 별도의 가벼운 Docker 컨테이너로 띄워 통신합니다.
+  1) OCR API 서버 빌드 및 실행
+  프로젝트 루트 디렉토리에서 아래 명령어를 실행하여 서버를 백그라운드에 띄웁니다. (OrbStack 또는 Docker Desktop 실행 필수)
+
+  ``` bash
+  docker build -t ocr-engine-api .
+  docker run -d -p 8000:8000 --name ocr-server ocr-engine-api
   ```
-* **Windows/macOS 환경:** 별도의 추가 설치 없이 동작하는 경우가 일반적이나, 에러 발생 시 MSVC(Windows) 또는 Xcode Command Line Tools(macOS) 설치가 필요할 수 있습니다.
+  
+  2) 환경 변수 설정 (.env)
+  프로젝트 루트에 .env 파일을 생성하고 아래 값을 입력합니다. 이 설정이 켜져 있어야 메인 애플리케이션이 Docker 서버로 OCR을 요청합니다.
+
+  ``` plaintext
+  USE_REMOTE_OCR=True
+  ```
 
 ### 3.3. Tesseract 엔진 설치
 현재 시스템의 메인 OCR 엔진은 `PaddleOCR` (ADR-006)이지만, 테스트 환경이나 과거 버전(ADR-005)의 호환성을 위해 `Tesseract`를 사용해야 하는 경우, 시스템 환경변수에 엔진을 등록해야 합니다.
@@ -44,7 +61,7 @@ poetry install
 
 ```bash
 # 가상환경 내에서 Streamlit 앱 실행
-poetry run streamlit run main.py
+uv run streamlit run main.py
 ```
 
 * 실행 후 터미널에 출력되는 `Local URL` (일반적으로 `http://localhost:8501`)을 브라우저에 입력하여 메인 페이지(SCR-01)에 접속합니다.
