@@ -1,6 +1,7 @@
 # src/core/pdf_loader.py
 from typing import Dict
 import pdfplumber
+from pdfminer.pdfdocument import PDFPasswordIncorrect
 import numpy as np
 import os
 import cv2
@@ -23,7 +24,8 @@ class PDFLoader:
         self.uploaded_file = uploaded_file
         self.metadata = self._parse_filename()
 
-        # TODO: 파일명 유효성 및 확장자(.pdf) 검증 로직 추가 (validators.py 등 외부 유틸리티 연동 고려)
+        # 객체 생성 시점에 유효성 검사
+        self._validate_file()
 
     def convert_to_images(self, start_page: int = DEFAULT_START_PAGE, end_page: int = None) -> list[np.ndarray]:
         """
@@ -37,31 +39,71 @@ class PDFLoader:
         """
         all_pages_bgr = []
 
-        # pdfplumber.open(self.uploaded_file)을 사용하여 PDF 스트림 열기
-        with pdfplumber.open(self.uploaded_file) as pdf:
-            total_pages = len(pdf.pages)
-            # OCR 처리가 필요한 페이지 범위 설정 (기본적으로 3페이지부터 끝까지)
-            if end_page is None:
-                end_page = total_pages
-            target_pages = pdf.pages[start_page - 1:end_page]
+        try:
+            # pdfplumber.open(self.uploaded_file)을 사용하여 PDF 스트림 열기
+            with pdfplumber.open(self.uploaded_file) as pdf:
+                total_pages = len(pdf.pages)
 
-            # pdf 내의 각 페이지(pages 속성)를 순회하는 반복문 작성
-            for page in target_pages:
-                # page.to_image(resolution=300)을 호출하여 각 페이지를 고해상도 이미지(PIL 객체)로 렌더링
-                img_pil = page.to_image(resolution=300).original    # resolution=300은 OCR 인식률 향상을 위한 고해상도 설정
+                # 전체 페이지가 OCR 처리 시작 페이지보다 작은 경우 에러 반환
+                if total_pages < start_page:
+                    raise ValueError(
+                        f"파일의 페이지가 {start_page}보다 적습니다."
+                    )
 
-                # 렌더링된 PIL 객체(기본 RGB 포맷)를 numpy.ndarray로 변환
-                img_array = np.array(img_pil)
+                # OCR 처리가 필요한 페이지 범위 설정 (기본적으로 3페이지부터 끝까지)
+                if end_page is None:
+                    end_page = total_pages
+                target_pages = pdf.pages[start_page - 1:end_page]
 
-                # cv2.cvtColor를 사용하여 RGB 채널을 OpenCV 기본 포맷인 BGR 채널로 변경
-                # PIL은 기본적으로 RGB 포맷이므로 OpenCV 처리를 위해 BGR로 변환이 필요
-                img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+                # pdf 내의 각 페이지(pages 속성)를 순회하는 반복문 작성
+                for page in target_pages:
+                    # page.to_image(resolution=300)을 호출하여 각 페이지를 고해상도 이미지(PIL 객체)로 렌더링
+                    img_pil = page.to_image(resolution=300).original    # resolution=300은 OCR 인식률 향상을 위한 고해상도 설정
 
-                # 변환이 완료된 BGR 이미지 배열을 리스트에 담아 반환
-                # TODO: 대용량 파일 대비 제너레이터(yield) 패턴 사용 고려
-                all_pages_bgr.append(img_bgr)
+                    # 렌더링된 PIL 객체(기본 RGB 포맷)를 numpy.ndarray로 변환
+                    img_array = np.array(img_pil)
+
+                    # cv2.cvtColor를 사용하여 RGB 채널을 OpenCV 기본 포맷인 BGR 채널로 변경
+                    # PIL은 기본적으로 RGB 포맷이므로 OpenCV 처리를 위해 BGR로 변환이 필요
+                    img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+
+                    # 변환이 완료된 BGR 이미지 배열을 리스트에 담아 반환
+                    # TODO: 대용량 파일 대비 제너레이터(yield) 패턴 사용 고려
+                    all_pages_bgr.append(img_bgr)
+
+        except PDFPasswordIncorrect:
+            raise ValueError("비밀번호가 설정된 PDF 파일입니다. 접근 권한이 없어 내용을 읽을 수 없습니다.")
+
+        except ValueError as ve:
+            raise ve
+
+        # TODO: 예외 세분화하기
+        except Exception as e:
+            raise ValueError(f"PDF 파일을 여는 중 오류가 발생했습니다.: {str(e)}")
 
         return all_pages_bgr
+
+    def _validate_file(self, limit_mb: int = 300):
+        """
+        업로드된 파일의 유효성(확장자, 크기 등)을 종합적으로 검증합니다.
+        """
+        if not self.uploaded_file:
+            raise ValueError("업로드한 파일이 없습니다.")
+
+        # 확장자 검증
+        if not self.uploaded_file.name.lower().endswith('.pdf'):
+            raise ValueError("지원하지 않는 파일 형식입니다. pdf 파일만 업로드 가능합니다.")
+
+        # 파일 크기 검증
+        if hasattr(self.uploaded_file, 'size'):
+            file_size_bytes = self.uploaded_file.size
+            limit_bytes = limit_mb * 1024 * 1024
+
+            if file_size_bytes > limit_bytes:
+                raise ValueError(
+                    f"파일 크기 제한({limit_mb}MB)을 초과했습니다. "
+                    f"(현재 크기: {file_size_bytes / (1024 * 1024):.2f}MB)"
+                )
 
     def _parse_filename(self) -> Dict[str, str]:
         """

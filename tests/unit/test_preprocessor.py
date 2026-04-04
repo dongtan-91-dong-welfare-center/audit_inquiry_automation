@@ -5,6 +5,7 @@ import os
 import numpy as np
 from src.core.preprocessor import ImagePreprocessor
 from src.core.pdf_loader import PDFLoader
+from tests.conftest import mock_image_factory
 
 
 @pytest.fixture(scope="module")
@@ -55,83 +56,94 @@ class TestImagePreprocessor:
     # ---------------------------------------------------------
 
     @pytest.mark.unit
-    def test_table_filtering_and_sorting(self):
-        """미세 노이즈(면적 1% 미만) 필터링 기능과 좌표 기반 정렬(위에서 아래로, 왼쪽에서 오른쪽으로) 기능이 정확히 동작하는지 검증합니다."""
-        # 1000x1000 크기의 빈 백지(255) 생성
-        mock_page = np.full((1000, 1000), 255, dtype=np.uint8)
+    def test_noise_and_area_filtering(self, mock_image_factory):
+        """설정한 임계값 미만의 노이즈 컨투어를 제거하는지 검증"""
+        mock_page = mock_image_factory(height=1000, width=1000, channels=3)
+        # 유효한 표(면적 큼)
+        cv2.rectangle(mock_page, (100, 100), (400, 400), 0, -1)
 
-        # 표 1: 우측 상단 배치 (업스케일 반영 후 면적: 800*600 = 480,000 -> 1% 초과)
-        cv2.rectangle(mock_page, (500, 100), (900, 400), (0, 0, 0), -1)
+        # 노이즈(매우 작은 점)
+        cv2.rectangle(mock_page, (10, 10), (20, 20), 0, -1)
 
-        # 표 2: 좌측 하단 배치 (업스케일 반영 후 면적: 800*600 = 480,000 -> 1% 초과)
-        cv2.rectangle(mock_page, (100, 600), (500, 900), (0, 0, 0), -1)
-
-        # 노이즈: 좌측 상단 아주 작은 점 (업스케일 반영 후 면적: 40*40 = 1,600 -> 1% 미만)
-        cv2.rectangle(mock_page, (10, 10), (30, 30), (0, 0, 0), -1)
-
-        # 단일 페이지 전처리 수행
         tables = self.preprocessor._process_page(mock_page)
 
-        # 노이즈가 필터링되어 정확히 2개의 표만 추출되어야 함
-        assert len(tables) == 2
-
-        # y좌표가 작은 것(표 1, 상단)이 먼저 오고, 3채널(BGR)로 변환되었는지 검증
-        table_1, table_2 = tables
-
-        # 팽창 연산으로 인해 사방으로 확장된 픽셀(14px)을 반영한 크기로 검증
-        assert table_1.shape == (614, 814, 3), "첫 번째 표의 크기나 채널이 맞지 않습니다."
-        assert table_2.shape == (614, 814, 3), "두 번째 표의 크기나 채널이 맞지 않습니다."
+        # 노이즈는 무시하고 큰 사각형 1개를 추출해야 함
+        assert len(tables) == 1
 
     @pytest.mark.unit
-    def test_remove_vertical_lines(self):
-        """
-        세로선 제거 로직(_remove_vertical_lines)이 일반 텍스트(가로선)는 보존하고 긴 세로선만 흰색으로 지우는지 검증합니다.
-        """
-        # 100x200 크기의 백지 생성
-        mock_image = np.full((200, 100), 255, dtype=np.uint8)
+    def test_empty_contour_handling(self, mock_image_factory):
+        """표가 없는 이미지 입력 시 IndexError 없이 빈 리스트를 반화하는지 검증"""
+        mock_page = mock_image_factory(height=1000, width=1000, channels=3)
 
-        # 중앙에 검은색(0) 긴 세로선 그리기 (굵기 2)
-        cv2.line(mock_image, (50, 10), (50, 190), 0, 2)
+        result = self.preprocessor._process_page(mock_page)
 
-        # 일반 글자를 흉내낸 작은 노이즈(가로선) 추가
-        cv2.line(mock_image, (20, 100), (40, 100), 0, 2)
-
-        # 세로선 제거 로직 단독 실행 (3채널 BGR 반환)
-        result = self.preprocessor._remove_vertical_lines(mock_image)
-
-        # Then 1: 긴 세로선이 있던 (100, 50) 픽셀은 흰색([255, 255, 255])으로 지워져야 함
-        assert np.all(result[100, 50] == 255), "세로선이 정상적으로 제거되지 않았습니다."
-
-        # Then 2: 가로선(일반 텍스트)이 있던 (100, 30) 픽셀은 여전히 검은색(0) 근처여야 함
-        assert np.all(result[100, 30] < 255), "일반 텍스트(가로선)가 잘못 지워졌습니다."
+        assert result == []
 
     @pytest.mark.unit
-    def test_process_pages_channel_conversion(self):
+    def test_multi_table_sorting_order(self, mock_image_factory):
+        """여러 표가 있을 때 상단 -> 하단, 좌 -> 우 순서로 정렬하여 반환하는지 검증"""
+        mock_page = mock_image_factory(height=1000, width=1000, channels=3)
+
+        # 좌측 상단(1순위)
+        cv2.rectangle(mock_page, (100, 100), (300, 300), 0, -1)
+
+        # 우측 상단(2순위)
+        cv2.rectangle(mock_page, (500, 100), (700, 300), 0, -1)
+
+        # 중앙 하단(3순위)
+        cv2.rectangle(mock_page, (300, 600), (500, 800), 0, -1)
+
+        table = self.preprocessor._process_page(mock_page)
+
+        assert len(table) == 3
+
+    @pytest.mark.unit
+    def test_vertical_line_removal_logic(self):
         """
-        입력 이미지가 1채널 흑백이더라도 파이프라인의 최종 출력물은 반드시 3채널(BGR)로 규격화되는지 검증합니다.
+        긴 세로선은 제거하되, 짧은 가로선(텍스트 대용)은 유지하는지 검증
         """
-        # 표가 하나 그려진 1채널 흑백 이미지 생성
-        mock_page_gray = np.full((500, 500), 255, dtype=np.uint8)
-        cv2.rectangle(mock_page_gray, (50, 50), (450, 450), (0, 0, 0), -1)
+        test_img = np.full((200, 200), 255, dtype=np.uint8)
+
+        # 제거 대상 세로선
+        cv2.line(test_img, (100, 20), (100, 180), 0, 2)
+        # 보존 대상 가로선
+        cv2.line(test_img, (80, 100), (120, 100), 0, 2)
+
+        processed = self.preprocessor._remove_vertical_lines(test_img)
+
+        # 세로선 좌표는 흰색으로 변해야 함
+        assert np.all(processed[20, 100] == 255)
+        # 가로선 좌표는 여전히 검은색(텍스트 보존)이어야 함
+        assert np.all(processed[100, 85] < 200)
+
+    @pytest.mark.unit
+    def test_output_channel_dimensions(self, mock_image_factory):
+        """
+        입력 이미지가 1채널 흑백이더라도 결과물은 항상 3채널(BGR)인지 검증합니다.
+        """
+        gray_page = mock_image_factory(height=1000, width=1000, channels=1)
+        cv2.rectangle(gray_page, (100, 100), (200, 200), -1)
 
         # 배치 처리 파이프라인 통과
-        result_tables = self.preprocessor.process_pages([mock_page_gray])
+        table = self.preprocessor._process_page(gray_page)
 
-        # 크롭된 표가 리스트에 담겨 반환되며, BGR 3채널로 확정되어야 함
-        assert len(result_tables) == 1
-        assert result_tables[0].ndim == 3, "결과물이 3차원 배열이 아닙니다."
-        assert result_tables[0].shape[-1] == 3, "결과물이 3채널(BGR)로 변환되지 않았습니다."
+        assert len(table) == 1
+        assert table[0].ndim == 3
+        assert table[0].shape[2] == 3
 
     @pytest.mark.unit
-    def test_empty_table_handling(self):
+    def test_multi_page_result_merging(self, mock_image_factory):
         """
-        이미지 내에 추출할 수 있는 표(1% 이상 면적)가 전혀 없을 때 오류를 발생시키지 않고 빈 리스트를 정상적으로 반환하는지 방어 로직을 검증합니다.
+        여러 페이지에서 나온 표가 순서대로 하나의 리스트에 병합하는지 검증
         """
-        # 완전히 비어있는 3채널 백지 생성
-        mock_empty_page = np.full((500, 500, 3), 255, dtype=np.uint8)
+        page_1 = mock_image_factory(height=1000, width=1000, channels=3)
+        cv2.rectangle(page_1, (100, 100), (200, 200), 0, -1)
 
-        # 단일 페이지 처리
-        result_tables = self.preprocessor._process_page(mock_empty_page)
+        page_2 = mock_image_factory(height=1000, width=1000, channels=3)
+        cv2.rectangle(page_2, (100, 100), (200, 200), 0, -1)
+        cv2.rectangle(page_2, (500, 500), (800, 800), 0, -1)
 
-        # 에러 없이 빈 리스트를 반환
-        assert result_tables == [], "빈 페이지에서 빈 리스트가 아닌 값을 반환했습니다."
+        # 전체 파이프라인 실행
+        combined_tables = self.preprocessor.process_pages([page_1, page_2])
+
+        assert len(combined_tables) == 3

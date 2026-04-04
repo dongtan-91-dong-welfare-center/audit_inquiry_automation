@@ -98,28 +98,44 @@ class ImagePreprocessor:
         # 가장 바깥쪽 테두리 탐지
         contours, _ = cv2.findContours(dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        table_images = []
-
+        total_area = upscaled.shape[0] * upscaled.shape[1]
         # 페이지 면적의 1% 이상의 외곽선만 표로 간주 (미세 노이즈 배제)
-        min_table_area = (upscaled.shape[0] * upscaled.shape[1]) * 0.01
+        valid_contours = self._filter_valid_contours(contours, total_area)
 
-        for cnt in contours:
-            if cv2.contourArea(cnt) > min_table_area:
-                # 외곽선을 감싸는 직사각형 영역 크롭
-                x, y, w, h = cv2.boundingRect(cnt)
-                table_crop = upscaled[y:y + h, x:x + w]
+        table_images = []
+        # 필터링한 유효 컨투어를 가지고 크롭 및 처리
+        for cnt in valid_contours:
+            # 외곽선을 감싸는 직사각형 영역 크롭
+            x, y, w, h = cv2.boundingRect(cnt)
+            table_crop = upscaled[y:y + h, x:x + w]
 
-                # 크롭한 표 영역의 세로선 제거 및 3채널 변환 수행
-                final_table = self._remove_vertical_lines(table_crop)
-                table_images.append({'img': final_table, 'y': y, 'x': x})
+            # 크롭한 표 영역의 세로선 제거 및 3채널 변환 수행
+            final_table = self._remove_vertical_lines(table_crop)
+            table_images.append({'img': final_table, 'y': y, 'x': x})
 
         if not table_images:
             return []
 
         # 문서 순서(위->아래, 왼쪽->오른쪽)에 따른 정렬
-        table_images.sort(key=lambda s: (s['y'], s['x']))
+        sorted_tables = self._sort_tables_by_coordinates(table_images)
 
-        return [image['img'] for image in table_images]
+        return [image['img'] for image in sorted_tables]
+
+    @staticmethod
+    def _filter_valid_contours(contours: tuple, total_area: float, min_area_ratio: float = 0.01) -> list[np.ndarray]:
+        """
+        탐지된 외곽선 중 최소 면적 비율(1% 초과)을 충족하는 유효 컨투어만 반환합니다.
+
+        Args:
+            contours (tuple): cv2.findContours 함수를 통해 탐지된 외곽선(컨투어) 데이터 튜플
+            total_area (float): 기준이 되는 원본/전처리 이미지의 전체 면적 (가로 x 세로)
+            min_area_ratio (float): 유효한 표 영역으로 간주할 최소 면적 비율 (기본값: 0.01, 즉 1% 초과)
+
+        Returns:
+            list[np.ndarray]: 지정된 최소 면적 비율 조건을 만족하는 유효한 컨투어 배열들의 리스트
+        """
+        min_table_area = total_area * min_area_ratio
+        return [cnt for cnt in contours if cv2.contourArea(cnt) > min_table_area]
 
     @staticmethod
     def _remove_vertical_lines(image: np.ndarray) -> np.ndarray:
@@ -152,3 +168,17 @@ class ImagePreprocessor:
         # 3채널(BGR)로 변환하여 반환
         result_bgr = cv2.cvtColor(result_gray, cv2.COLOR_GRAY2BGR)
         return result_bgr
+
+    @staticmethod
+    def _sort_tables_by_coordinates(table_metadata: list[dict]) -> list[dict]:
+        """
+        추출한 표의 메타데이터를 문서 순서(Y축 하행, X축 우행)로 정렬합니다.
+
+        Args:
+            table_metadata (list[dict]): 추출된 표 이미지 객체와 좌상단 좌표 정보를 담은 딕셔너리의 리스트
+                                         (예: [{'img': np.ndarray, 'y': int, 'x': int}, ...])
+
+        Returns:
+            list[dict]: 위에서 아래로(Y축 오름차순), 같은 높이일 경우 왼쪽에서 오른쪽으로(X축 오름차순) 정렬이 완료된 딕셔너리 리스트
+        """
+        return sorted(table_metadata, key=lambda s: (s['y'], s['x']))

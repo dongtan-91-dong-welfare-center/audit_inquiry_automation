@@ -24,6 +24,7 @@ def render_ui():
         end_page = st.number_input("종료 페이지 (선택)", min_value=DEFAULT_START_PAGE, value=4, step=1, help=f"OCR을 수행할 마지막 페이지 번호(최소 {DEFAULT_START_PAGE}페이지 이상)")
 
     # 파일 업로드 영역
+    # TODO: 300MB 이상의 파일을 업로드하지 못 하도록 제한해야 함
     uploaded_files = st.file_uploader(
         "PDF 파일들을 업로드하세요",
         type=["pdf"],
