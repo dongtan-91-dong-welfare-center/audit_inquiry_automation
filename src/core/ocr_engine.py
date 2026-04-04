@@ -12,15 +12,20 @@ class OCRExtractor:
     인식된 텍스트들을 위치(좌표) 기반으로 묶어 3차원 리스트로 반환합니다.
     """
     
-    def __init__(self, lang: str = 'korean'):
+    def __init__(self, lang: str = 'korean', use_gpu: bool = False):
         """
         PaddleOCR 엔진 초기화 및 환경 설정.
         - lang: 'korean' (한국어 및 영어 동시 인식 지원)
         - use_angle_cls: 텍스트 방향 자동 보정 활성화 (기울어진 글자 교정)
+        - use_gpu: GPU 가속 사용 여부 (기본값: False)
         """
         # 처음 실행 시 모델 가중치를 다운로드하므로 약간의 시간이 소요될 수 있습니다.
-        # show_log=False 파라미터는 버전 호환성 문제로 제외하여 기본값으로 실행합니다.
-        self.ocr = PaddleOCR(use_angle_cls=True, lang=lang)
+        self.ocr = PaddleOCR(
+            use_angle_cls=True,
+            lang=lang,
+            use_gpu=use_gpu,
+            show_log=False
+        )
 
     def extract_table_data(self, table_images: List[np.ndarray]) -> List[List[List[str]]]:
         """
@@ -144,7 +149,7 @@ class OCRExtractor:
             # 스캔 과정에서 테이블이 약간 기울어질 수 있기 때문에 사용하는 조건
             # '금융상품의' , '종류(1)'와 같이 글자 사이가 떨어져 있는 것을 하나의 행으로 인식하고자 하는 코드가 아님.
             # 위와 같은 결과값 조정은 postprocessing 단계에서 별도로 처리할 예정입니다.
-            if abs(item['center_y'] - avg_y) < (item['height'] / 2 + 5):
+            if abs(item['center_y'] - avg_y) < (item['height'] / 2 + 10):
                 current_cluster.append(item)
             else:
                 # 오차를 벗어나면 다음 줄(행)으로 넘김

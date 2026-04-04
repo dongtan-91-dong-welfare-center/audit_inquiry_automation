@@ -11,20 +11,32 @@
 
 ## 3. 설치 프로세스
 
-### 3.1. 저장소 클론 및 패키지 설치
-프로젝트 소스 코드를 로컬 환경으로 가져온 후, `pyproject.toml`과 `poetry.lock`을 기반으로 의존성 패키지를 설치합니다.
+### 3.1. 저장소 클론 및 패키지 설치 (CPU 환경)
+프로젝트 소스 코드를 로컬 환경으로 가져온 후, `pyproject.toml`과 `poetry.lock`을 기반으로 의존성 패키지를 설치합니다. 기본 설치는 CPU 연산을 기반으로 동작합니다.
 
 ```bash
 # 1. 프로젝트 저장소 클론 (경로는 실제 환경에 맞게 수정)
 git clone https://github.com/dongtan-91-dong-welfare-center/audit_inquiry_automation.git
 cd audit_inquiry_automation
 
-# 2. Poetry를 통한 가상환경 생성 및 의존성 패키지 설치
+# 2. Poetry를 통한 가상환경 생성 및 의존성 패키지 설치 (CPU 기본 설정)
 poetry install
 ```
 *※ `poetry install` 실행 시 `pdfplumber`, `opencv-python`, `paddleocr`, `streamlit` 등의 핵심 라이브러리가 자동으로 설치됩니다.*
 
-### 3.2. 시스템 의존성 라이브러리 설치 (OS별)
+### 3.2. GPU 연산 환경 지원 (선택사항)
+고사양 환경(GPU)에서 대량의 문서를 빠르게 처리하고자 할 경우, 다음의 명령어를 통해 GPU 지원 의존성을 추가로 설치할 수 있습니다.
+
+```bash
+# 1. GPU 지원 의존성(paddlepaddle-gpu)을 포함하여 설치
+poetry install -E gpu
+
+# 또는 직접 패키지를 추가할 수도 있습니다.
+poetry add paddlepaddle-gpu
+```
+> **참고:** GPU 버전을 사용하기 위해서는 NVIDIA 드라이버, CUDA Toolkit 및 cuDNN이 사전에 호스트 시스템에 올바르게 설치되어 있어야 합니다.
+
+### 3.3. 시스템 의존성 라이브러리 설치 (OS별)
 **OpenCV** 및 **PaddleOCR**이 정상적으로 이미지를 처리하기 위해 OS 레벨의 그래픽 라이브러리가 필요할 수 있습니다.
 
 * **Linux (Ubuntu) 환경:**
@@ -34,7 +46,7 @@ poetry install
   ```
 * **Windows/macOS 환경:** 별도의 추가 설치 없이 동작하는 경우가 일반적이나, 에러 발생 시 MSVC(Windows) 또는 Xcode Command Line Tools(macOS) 설치가 필요할 수 있습니다.
 
-### 3.3. Tesseract 엔진 설치
+### 3.4. Tesseract 엔진 설치
 현재 시스템의 메인 OCR 엔진은 `PaddleOCR` (ADR-006)이지만, 테스트 환경이나 과거 버전(ADR-005)의 호환성을 위해 `Tesseract`를 사용해야 하는 경우, 시스템 환경변수에 엔진을 등록해야 합니다.
 * 상세 설치 방법은 프로젝트 내의 `docs/achieve/tesseract_install_guide.md` 문서를 참조하시기 바랍니다.
 

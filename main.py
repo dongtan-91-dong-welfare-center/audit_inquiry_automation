@@ -22,6 +22,7 @@ def render_ui():
     # TODO: 실제 업무에서는 송장이 PDF 맨 앞 페이지에 포함되어 있으므로 기본값을 5페이지로 변경
     with st.expander("⚙️ 처리 설정", expanded=True):
         end_page = st.number_input("종료 페이지 (선택)", min_value=DEFAULT_START_PAGE, value=4, step=1, help=f"OCR을 수행할 마지막 페이지 번호(최소 {DEFAULT_START_PAGE}페이지 이상)")
+        use_gpu = st.checkbox("GPU 가속 사용", value=False, help="PaddleOCR의 GPU 연산을 활성화합니다. (paddlepaddle-gpu 설치 필요)")
 
     # 파일 업로드 영역
     # TODO: 300MB 이상의 파일을 업로드하지 못 하도록 제한해야 함
@@ -36,9 +37,9 @@ def render_ui():
         if not uploaded_files:
             st.warning("먼저 PDF 파일을 하나 이상 업로드해주세요.")
         else:
-            process_workflow(uploaded_files, DEFAULT_START_PAGE, end_page)
+            process_workflow(uploaded_files, DEFAULT_START_PAGE, end_page, use_gpu)
 
-def process_workflow(uploaded_files, start_page, end_page):
+def process_workflow(uploaded_files, start_page, end_page, use_gpu):
     """
     업로드된 파일들을 핵심 파이프라인으로 통과시키고 최종 엑셀 파일을 생성합니다.
     """
@@ -50,7 +51,7 @@ def process_workflow(uploaded_files, start_page, end_page):
 
     st.info("AI 모델 및 파이프라인 엔진을 초기화 중입니다. 잠시만 기다려주세요...")
     preprocessor = ImagePreprocessor()
-    ocr = OCRExtractor()
+    ocr = OCRExtractor(use_gpu=use_gpu)
     postprocessor = PostProcessor()
     builder = ExcelBuilder()
 
