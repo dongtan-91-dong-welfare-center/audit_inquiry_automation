@@ -10,6 +10,7 @@ from src.core.pdf_loader import PDFLoader
 from src.core.preprocessor import ImagePreprocessor
 from src.core.ocr_engine import OCRExtractor
 
+# TODO: test_ocr_pipeline_integration을 tests/integration/test_pipeline_flow.py로 이관
 @pytest.mark.integration
 def test_ocr_pipeline_integration():
     """
@@ -130,7 +131,7 @@ class TestOCRExtractorUnit:
         assert result[0] == ["정상데이터"]
 
     @pytest.mark.unit
-    def test_extract_table_data_empty_input(self):
+    def test_extract_table_data_empty_input(self, mock_image_factory):
         """
         빈 이미지 리스트가 들어왔을 때나, OCR 엔진이 아무것도 찾지 못했을 때의 처리를 검증합니다.
         """
@@ -140,8 +141,78 @@ class TestOCRExtractorUnit:
         # OCR이 결과를 찾지 못한 경우 self.ocr.ocr() 호출 시 [None]을 반환하도록 설정
         self.mock_ocr_instance.ocr.return_value = [None]
 
-        dummy_image = np.zeros((100, 100, 3), dtype=np.uint8)
+        dummy_image = mock_image_factory(height=100, width=100, channels=3)
         result = self.extractor.extract_table_data([dummy_image])
 
         # 빈 결과물을 반환해야 함
         assert result == []
+
+    @pytest.mark.unit
+    def test_group_into_rows_corrupted_bbox(self):
+        """
+        손상된 좌표(Bounding Box) 데이터 예외 처리 검증
+        ocr_engine.py 내부의 try-except (IndexError, TypeError) 블록이
+        정상적으로 작동하여 에러 없이 해당 단어를 스킵하는지 확인합니다.
+        """
+        # 고의로 손상시킨 좌표 데이터 모음
+        corrupted_ocr_data = [
+            # 1. IndexError 유발 케이스 (2차원 좌표값이 아닌 단일 값만 존재하는 경우)
+            [[[10], [20], [20], [10]], ("에러유발_인덱스", 0.9)],
+
+            # 2. TypeError 유발 케이스 (None 또는 정수가 아닌 잘못된 타입이 들어간 경우)
+            [[None, None, None, None], ("에러유발_타입", 0.9)],
+
+            # 3. 정상 데이터 (이 데이터만 정상적으로 추출되어야 함)
+            [[[10, 10], [20, 10], [20, 20], [10, 20]], ("정상데이터", 0.99)]
+        ]
+
+        result = self.extractor._group_into_rows(corrupted_ocr_data)
+
+        # 프로그램이 중간에 멈추지 않고(Skip 처리), 정상 데이터 1개만 추출되어야 함
+        assert len(result) == 1
+        assert result[0] == ["정상데이터"]
+
+    @pytest.mark.unit
+    def test_extract_table_data_multiple_tables(self, mock_image_factory):
+        """
+        다중 표(Multiple Tables) 3차원 리스트 반환 검증
+        여러 장의 표 이미지가 주어졌을 때, 최종 아키텍처인
+        List[List[List[str]]] 형태를 정확하게 구축하여 반환하는지 확인합니다.
+        """
+        # 2개의 가짜(Dummy) 이미지 생성
+        image1 = mock_image_factory(height=100, width=100, channels=3)
+        image2 = mock_image_factory(height=100, width=100, channels=3)
+
+        # 첫 번째 표 이미지에서 인식될 가짜 OCR 결과 (행 1개, 단어 2개)
+        ocr_result_table1 = [
+            [
+                [[[10, 10], [50, 10], [50, 20], [10, 20]], ("표1-단어1", 0.99)],
+                [[[60, 10], [100, 10], [100, 20], [60, 20]], ("표1-단어2", 0.99)]
+            ]
+        ]
+
+        # 두 번째 표 이미지에서 인식될 가짜 OCR 결과 (행 1개, 단어 1개)
+        ocr_result_table2 = [
+            [
+                [[[10, 10], [50, 10], [50, 20], [10, 20]], ("표2-단어1", 0.99)]
+            ]
+        ]
+
+        # extract_table_data 내부에서 for문으로 이미지를 순회할 때,
+        # 순차적으로 다른 OCR 결과를 반환하도록 side_effect 설정
+        self.mock_ocr_instance.ocr.side_effect = [ocr_result_table1, ocr_result_table2]
+
+        # 2개의 표 이미지를 엔진에 입력
+        result = self.extractor.extract_table_data([image1, image2])
+
+        # 1. 3차원 리스트 형태 검증 및 최상위 요소 개수 검증 (표가 2개여야 함)
+        assert isinstance(result, list)
+        assert len(result) == 2
+
+        # 2. 첫 번째 표 데이터 검증
+        assert isinstance(result[0], list)  # 2차원 요소 검증
+        assert isinstance(result[0][0], list)  # 3차원 요소 검증
+        assert result[0] == [["표1-단어1", "표1-단어2"]]
+
+        # 3. 두 번째 표 데이터 검증
+        assert result[1] == [["표2-단어1"]]

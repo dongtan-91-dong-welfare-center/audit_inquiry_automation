@@ -37,24 +37,51 @@ class TestPDFLoader:
     def test_invalid_input_and_extension(self):
         """잘못된 입력(None) 및 확장자 핸들링을 테스트합니다."""
         # 1. None 입력 테스트
-        loader_none = PDFLoader(None)
-        assert loader_none.uploaded_file is None
+        with pytest.raises(ValueError, match="업로드한 파일"):
+            PDFLoader(None)
 
         # 2. 잘못된 확장자 테스트
         mock_file = MagicMock()
-        mock_file.name = "not_a_pdf.png"
-        loader_invalid = PDFLoader(mock_file)
+        mock_file.name = "(주)삼성은행_4_신한은행.png"
+        mock_file.size = 10 * 1024 * 1024
 
-        # TODO: PDFLoader 내부에 확장자 체크 로직을 추가하는 경우 에러 발생 여부를 체크
-        # with pytest.raises(ValueError):
-        #     loader_invalid.validate_extension()
-        assert loader_invalid.uploaded_file.name.endswith(".png")
+        with pytest.raises(ValueError, match="지원하지 않는 파일 형식"):
+            PDFLoader(mock_file)
+
+    @pytest.mark.unit
+    @patch("pdfplumber.open")
+    def test_password_protected_pdf(self, mock_pdf_open):
+        """비밀번호가 걸린 PDF 처리 시 방어 로직이 동작하는지 확인합니다."""
+        # pdfplumber가 비밀번호가 걸린 파일을 열 때 발생하는 예외 모킹
+        from pdfminer.pdfdocument import PDFPasswordIncorrect
+        mock_pdf_open.side_effect = PDFPasswordIncorrect("")
+
+        mock_file = MagicMock()
+        mock_file.name = "(주)삼성전자_2_하나은행.pdf"
+        mock_file.size = 10 * 1024 * 1024
+        loader = PDFLoader(mock_file)
+
+        # 비밀번호 예외를 감지하고 적절한 에러 메시지를 반환하는지 검증
+        with pytest.raises(ValueError, match="비밀번호가 설정된|접근 권한"):
+            loader.convert_to_images()
+
+    @pytest.mark.unit
+    def test_file_size_limit_exceeded(self):
+        """PDF 크기가 제한을 초과하는 경우 에러를 반환하는지 확인합니다."""
+        mock_file = MagicMock()
+        mock_file.name = "(주)삼성전자_3_우리은행.pdf"
+        # 파일 크기를 350MB (350 * 1024 * 1024 bytes)로 모킹
+        mock_file.size = 367001600
+
+        with pytest.raises(ValueError, match="크기 제한|300MB"):
+            PDFLoader(mock_file)
 
     @pytest.mark.unit
     def test_filename_parsing_logic(self):
         """파일명에서 회사명과 조회처가 올바르게 분리되는지 확인합니다."""
         mock_file = MagicMock()
         mock_file.name = " 현대자동차 _ 01 _ 우리은행 .pdf"  # 공백이 섞인 경우 가정
+        mock_file.size = 10 * 1024 * 1024
 
         loader = PDFLoader(mock_file)
         assert loader.metadata["company_name"] == "현대자동차"
@@ -66,62 +93,81 @@ class TestPDFLoader:
         # Case A: 언더바가 없는 경우
         mock_file_invalid = MagicMock()
         mock_file_invalid.name = "삼성전자국민은행.pdf"
+        mock_file_invalid.size = 10 * 1024 * 1024
 
-        loader = PDFLoader(mock_file_invalid)
-        assert loader.metadata["is_valid_format"] is False
-        assert loader.metadata["company_name"] == "삼성전자국민은행"
+        #  raises로 에러 발생을 확인
+        with pytest.raises(ValueError, match="파일명 형식"):
+            PDFLoader(mock_file_invalid)
 
         # Case B: 파트가 부족한 경우 (회사_숫자.pdf)
         mock_file_short = MagicMock()
         mock_file_short.name = "삼성전자_1.pdf"
+        mock_file_short.size = 10 * 1024 * 1024
 
-        loader_short = PDFLoader(mock_file_short)
-        assert loader_short.metadata["is_valid_format"] is False
-        assert loader_short.metadata["bank_name"] == "형식오류_조회처"
+        with pytest.raises(ValueError, match="파일명 형식"):
+            PDFLoader(mock_file_short)
 
     @pytest.mark.unit
     @patch("src.core.pdf_loader.cv2.cvtColor")
     @patch("pdfplumber.open")
-    def test_page_slicing_and_default_logic(self, mock_pdf_open, mock_cv2_convert):
-        """페이지 슬라이싱 로직과 기본값(3페이지) 적용 여부를 통합 검증합니다."""
-        # 1. 가짜 PDF 설정 (총 10페이지)
-        mock_pdf = MagicMock()
-        mock_page  = MagicMock()
+    def test_convert_to_images_slicing(self, mock_pdf_open, mock_cv2_convert):
+        """PDF 슬라이싱 로직을 검증합니다."""
+        # 공통 설정
+        mock_cv2_convert.side_effect = lambda x, y: x
 
-        # page.to_image().original이 호출될 때 반환할 가짜 값
-        mock_page.to_image.return_value.original = np.zeros((100, 100, 3), dtype=np.uint8)
+        # 업로드 파일 모킹 (pdfloader 생성용)
+        mock_file = MagicMock()
+        mock_file.name = "(주)삼성전자_6_제주은행.pdf"
+        mock_file.size = 10 * 1024 * 1024
+
+        # pdf 내용 모킹
+        mock_pdf = MagicMock()
         mock_pdf.pages = [MagicMock()] * 10
         mock_pdf_open.return_value.__enter__.return_value = mock_pdf
 
-        # cv2.cvtColor 호출 시 입력받은 것을 그대로 변환
-        mock_cv2_convert.side_effect = lambda x, y: x
+        loader = PDFLoader(mock_file)
 
-        loader = PDFLoader(MagicMock())
-
-        # Case A: 3페이지부터 시작 (10 - 2 = 8개 기대)
-        assert len(loader.convert_to_images(start_page=3)) == 8
-
-        # Case B: 인자 생략 시 기본값(3) 적용 확인
+        # Case A: 기본값 적용 (3페이지부터 끝까지 -> 8개)
         assert len(loader.convert_to_images()) == 8
 
-        # Case C: 1페이지부터 전체 로드 (10개 기대)
+        # Case B: 특정 페이지 지정 (5페이지부터 끝까지 -> 6개)
+        assert len(loader.convert_to_images(start_page=5)) == 6
+
+        # Case C: 1페이지부터 전체 로드 (10개)
         assert len(loader.convert_to_images(start_page=1)) == 10
 
     @pytest.mark.unit
+    @patch("cv2.cvtColor")
     @patch("pdfplumber.open")
-    def test_edge_cases_handling(self, mock_pdf_open):
-        """범위를 벗어난 페이지나 빈 PDF 파일에 대한 방어 로직을 검증합니다."""
-        # 가짜 PDF 설정 (총 2페이지)
+    def test_convert_to_images_invalid_pages(self, mock_pdf_open, mock_cv2_convert):
+        """PDF 페이지 수가 시작 페이지 설정보다 적을 때의 에러 처리를 검증합니다."""
+        # 공통 설정
+        mock_cv2_convert.side_effect = lambda x, y: x
+
+        # 업로드 파일 모킹 (pdfloader 생성용)
+        mock_file = MagicMock()
+        mock_file.name = "(주)삼성전자_5_IM은행.pdf"
+        mock_file.size = 10 * 1024 * 1024
+
+        # pdf 내용 모킹
         mock_pdf = MagicMock()
-        mock_pdf.pages = [MagicMock(), MagicMock()]
+        mock_pdf.pages = [MagicMock()] * 10
         mock_pdf_open.return_value.__enter__.return_value = mock_pdf
 
-        loader = PDFLoader(MagicMock())
+        loader = PDFLoader(mock_file)
 
-        # Case A: 전체 페이지보다 큰 시작 페이지 요청
-        assert loader.convert_to_images(start_page=5) == []
+        # Case A: 2페이지 PDF에서 3페이지(기본값) 시작 요청 시 에러
+        mock_pdf.pages = [MagicMock()] * 2
+        with pytest.raises(ValueError, match="파일의 페이지가"):
+            loader.convert_to_images()
 
-        # Case B: 빈 PDF 파일 (0페이지)
+        # Case B: 0페이지(빈 파일) PDF일 때 에러
         mock_pdf.pages = []
-        assert loader.convert_to_images() == []
+        with pytest.raises(ValueError, match="파일의 페이지가"):
+            loader.convert_to_images()
+
+        # Case C: 시작 페이지를 10으로 주었는데 실제론 5페이지일 때
+        mock_pdf.pages = [MagicMock()] * 5
+        with pytest.raises(ValueError, match="파일의 페이지가"):
+            loader.convert_to_images(start_page=10)
 
