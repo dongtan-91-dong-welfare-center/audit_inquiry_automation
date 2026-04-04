@@ -22,6 +22,8 @@ class PDFLoader:
             uploaded_file: Streamlit에서 전달받은 UploadedFile 객체
         """
         self.uploaded_file = uploaded_file
+        # 객체면 .name을 찾고, 없으면(문자열이면) 경로에서 파일명만 추출하여 저장
+        self.filename = getattr(uploaded_file, 'name', os.path.basename(str(uploaded_file)))
         self.metadata = self._parse_filename()
 
         # 객체 생성 시점에 유효성 검사
@@ -91,7 +93,7 @@ class PDFLoader:
             raise ValueError("업로드한 파일이 없습니다.")
 
         # 확장자 검증
-        if not self.uploaded_file.name.lower().endswith('.pdf'):
+        if not self.filename.lower().endswith('.pdf'):
             raise ValueError("지원하지 않는 파일 형식입니다. pdf 파일만 업로드 가능합니다.")
 
         # 파일 크기 검증
