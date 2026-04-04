@@ -21,8 +21,7 @@ def test_ocr_pipeline_integration():
 
     # 1. 테스트 이미지 경로 설정 (tests/data/input/ 기준)
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    pdf_path = os.path.join(current_dir, "..", "data", "input", "bank_audit_letter-scan.pdf")
-
+    pdf_path = os.path.join(current_dir, "..", "data", "input", "(주)삼성전자_1_농협은행.pdf")
     print(f"\n▶ 1. PDF 파일 로딩 중: {os.path.basename(pdf_path)}")
 
     # PDFLoader 클래스를 불러와서 일괄적으로 돌리는 흐름 유지
@@ -73,9 +72,12 @@ class TestOCRExtractorUnit:
         테스트가 실행될 때마다 무거운 PaddleOCR 모델이 다운로드되거나 메모리에 올라가는 것을
         방지하기 위해 unittest.mock.patch를 사용하여 가짜 객체로 대체합니다.
         """
-        with patch('src.core.ocr_engine.PaddleOCR') as MockPaddle:
+        # create=True 옵션을 추가하고, 테스트 시에는 강제로 로컬 모드로 동작하게 설정
+        with patch('src.core.ocr_engine.PaddleOCR', create=True) as MockPaddle:
             # 모델 초기화 없이 OCRExtractor 인스턴스 생성
             self.extractor = OCRExtractor()
+            self.extractor.use_remote = False
+            self.extractor.ocr = MockPaddle.return_value
             self.mock_ocr_instance = MockPaddle.return_value
 
     @pytest.mark.unit
