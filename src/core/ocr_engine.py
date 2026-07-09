@@ -1,9 +1,25 @@
 #src/core/ocr_engine.py
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
+"""
+OpenMP 중복 로드 허용
+OpenCV와 PaddlePaddle이 각각 독립적인 병렬 연산 라이브러리(libiomp5)를 로드하려고 시도함
+macOS 커널은 이를 보안 및 안정성 위반으로 간주하여 즉시 SIGKILL을 보냄
+이 변수를 설정하면 PaddlePaddle이 libiomp5 로드를 포기하고 시스템에 이미 로드된 라이브러리를 공유하게 됨
+"""
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+USE_REMOTE_OCR = os.getenv("USE_REMOTE_OCR", "False").lower() in ('true', '1', 't')
+
+import requests
 import cv2
 import numpy as np
 from typing import List
-from paddleocr import PaddleOCR
 
+# 로컬 구동 시 필요한 라이브러리는 조건부로 임포트하여 Mac 환경에서의 충돌을 원천 차단
+if not USE_REMOTE_OCR:
+    from paddleocr import PaddleOCR
 
 class OCRExtractor:
     """
@@ -20,9 +36,31 @@ class OCRExtractor:
         """
         # 처음 실행 시 모델 가중치를 다운로드하므로 약간의 시간이 소요될 수 있습니다.
         # show_log=False 파라미터는 버전 호환성 문제로 제외하여 기본값으로 실행합니다.
-        self.ocr = PaddleOCR(use_angle_cls=True, lang=lang)
+        self.use_remote = USE_REMOTE_OCR
+        self.remote_url = os.getenv("OCR_API_URL", "http://localhost:8000/extract")
+        self.lang = lang
+        
+        # 로컬 실행 시 PaddleOCR 엔진 초기화
+        if not self.use_remote:
+            self.ocr = PaddleOCR(use_angle_cls=True, lang=lang)
 
     def extract_table_data(self, table_images: List[np.ndarray]) -> List[List[List[str]]]:
+        """
+        환경 변수에 따라 알아서 분기 처리하는 메인 메서드
+
+        Args:
+            table_images (List[np.ndarray]): 전처리 파이프라인에서 넘어온 표 이미지 배열들의 리스트
+            
+        Returns:
+            List[List[List[str]]]: 여러 표의 데이터가 담긴 3차원 리스트 
+                             예: [ [['표1-예금종류', '계좌번호'], ['보통예금', '111-222']], [['표2-대출', '금액']] ]
+        """
+        if self.use_remote:
+            return self._extract_via_api(table_images)
+        else:
+            return self._extract_via_local(table_images)
+
+    def _extract_via_local(self, table_images: List[np.ndarray]) -> List[List[List[str]]]:
         """
         OpenCV로 전처리된 여러 개의 표 이미지 배열(리스트)을 받아 각각 텍스트를 추출하고,
         표 형태의 3차원 리스트(List of List of Lists)로 변환하여 반환합니다.
@@ -60,6 +98,37 @@ class OCRExtractor:
             # 3. 유효한 행 데이터가 추출된 경우에만 최종 결과에 추가
             if parsed_rows:
                 all_tables_data.append(parsed_rows)
+                
+        return all_tables_data
+
+    def _extract_via_api(self, table_images: List[np.ndarray]) -> List[List[List[str]]]:
+        """
+        Docker 컨테이너 내부의 PaddleOCR API를 호출하여 텍스트를 추출하는 메서드
+
+        Args:
+            table_images (List[np.ndarray]): 전처리 파이프라인에서 넘어온 표 이미지 배열들의 리스트
+            
+        Returns:
+            List[List[List[str]]]: 여러 표의 데이터가 담긴 3차원 리스트 
+                             예: [ [['표1-예금종류', '계좌번호'], ['보통예금', '111-222']], [['표2-대출', '금액']] ]
+        """
+        all_tables_data = []
+        for table_image in table_images:
+            # 이미지를 API로 전송하기 위해 바이트로 인코딩
+            # HTTP API 통신을 통해 파이썬 객체를 다른 컨테이너로 발송하기 위해서는 Byte 스트림으로 직렬화 과정이 필수
+            _, img_encoded = cv2.imencode('.jpg', table_image)
+            files = {'file': ('image.jpg', img_encoded.tobytes(), 'image/jpeg')}
+            
+            # API 서버에 POST 요청을 보내고 응답을 받음
+            try:
+                response = requests.post(self.remote_url, files=files)
+                response.raise_for_status()
+                # API 서버가 파싱 완료된 3차원 리스트를 JSON으로 반환한다고 가정
+                result_data = response.json().get('data', [])
+                if result_data:
+                    all_tables_data.append(result_data)
+            except Exception as e:
+                print(f"OCR API 통신 에러: {e}")
                 
         return all_tables_data
 
