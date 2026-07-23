@@ -1,16 +1,47 @@
 [project]
-name = "standard-goverance-template"
+name = "audit-inquiry-automation"
 version = "0.1.0"
 description = ""
 authors = [
-    {name = "qldrh112",email = "didie8520@gmail.com"}
-]
-readme = "README.md"
-requires-python = ">=3.11"
-dependencies = [
+    {name = "PDW-Accountant",email = "kkk273@naver.com"}
 ]
 
+license = {text = "DONGTAN 91-DONG WELFARE CENTER"}
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "paddlepaddle>=2.6.0,<3.0.0",
+    "paddleocr>=2.7.0",
+    "numpy<2.0.0",
+    "protobuf>=3.20.0,<4.0.0",
+    "pydantic>=1.10,<2.0.0",
+    "pytest>=8.0.0,<9.0.0",  # 최신 안정 버전으로 조정
+    "openpyxl>=3.1.0,<4.0.0",
+    "opencv-python>=4.9.0,<5.0.0",
+    "pdfplumber>=0.11.9",
+    "setuptools>=70.0.0",
+    "requests>=2.31.0",
+    "python-dotenv>=1.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "streamlit>=1.30.0",
+]
+
+[tool.uv]
+package = false
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+# pytest 실행 시 현재 디렉토리(루트)를 PYTHONPATH에 추가
+pythonpath = ["."]
+testpaths = ["tests"]
+markers = [
+    "unit: Mock을 사용하는 가벼운 단위 테스트",
+    "integration: 실제 PDF 파일을 사용하는 무거운 통합 테스트"
+]
